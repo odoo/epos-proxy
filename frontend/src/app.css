@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+
+@theme {
+    --color-odoo-dark: #604058;
+    --color-odoo: #714B67;
+    --color-odoo-light: #A4728F;
+    --color-danger: rgb(210, 63, 58);
+    --color-success: rgb(0, 136, 24);
+    --color-warning: rgb(245, 158, 11);
+}
+

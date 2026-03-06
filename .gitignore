@@ -1,0 +1,9 @@
+build/bin
+node_modules
+frontend/dist
+
+.DS_Store
+
+.idea/
+
+/frontend/wailsjs/

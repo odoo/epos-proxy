@@ -1,0 +1,81 @@
+package printer
+
+import (
+	"encoding/base64"
+	"fmt"
+	"net"
+	"strings"
+	"time"
+
+	"epos-proxy/config"
+)
+
+const (
+	LANPort           = 9100
+	LANConnectTimeout = 3 * time.Second
+)
+
+type LANPrinterInfo struct {
+	IP string
+	Id string
+}
+
+func CheckLANPrinter(ip string) error {
+	addr := fmt.Sprintf("%s:%d", ip, LANPort)
+	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
+	if err != nil {
+		//log.Info("LAN printer %s is offline: %v", ip, err)
+		return err
+	}
+	_ = conn.Close()
+	return nil
+}
+
+func EncodeLANPrinterID(ip string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte("l:" + ip))
+}
+
+func DecodeLANPrinterID(id string) (string, bool) {
+	decoded, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		return "", false
+	}
+
+	if len(decoded) < 3 || decoded[1] != ':' {
+		return "", false
+	}
+
+	if decoded[0] != 'l' {
+		return "", false
+	}
+
+	return string(decoded[2:]), true
+}
+
+func ListLANPrinters(cfg *config.Manager) []LANPrinterInfo {
+	ips := cfg.GetLANPrinters()
+	result := make([]LANPrinterInfo, len(ips))
+
+	for i, ip := range ips {
+		result[i] = LANPrinterInfo{
+			IP: ip,
+			Id: EncodeLANPrinterID(ip),
+		}
+	}
+
+	return result
+}
+
+func ValidateIPAddress(ip string) (string, error) {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return "", fmt.Errorf("IP address cannot be empty")
+	}
+
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return "", fmt.Errorf("invalid IP address format")
+	}
+
+	return ip, nil
+}
