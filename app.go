@@ -107,11 +107,11 @@ func (a *App) Status() Status {
 	lanPrinters := printer.ListLANPrinters(a.config)
 	for _, info := range lanPrinters {
 		printers = append(printers, Printer{
-			Id:     info.Id,
-			Name:   fmt.Sprintf("Network - %s", info.IP),
-			Ip:     a.GetPrinterIp(info.Id),
-			IsLAN:  true,
-			LANIp:  info.IP,
+			Id:    info.Id,
+			Name:  fmt.Sprintf("Network - %s", info.IP),
+			Ip:    a.GetPrinterIp(info.Id),
+			IsLAN: true,
+			LANIp: info.IP,
 		})
 	}
 

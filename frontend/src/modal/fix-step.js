@@ -59,8 +59,15 @@ export function linuxSteps(printerName) {
                 '# Arch\nsudo pacman -S libusb'],
         },
         {
-            title: 'Reconnect your printer',
-            desc: `Unplug and replug your printer "${printerName}".\nThe driver should now be detected automatically.`,
+            title: 'Assign permissions to your user',
+            desc: 'Open a terminal and run the command for your distribution:',
+            codes: ['# Debian / Ubuntu\nsudo usermod -aG lp,plugdev $USER',
+                '# Fedora / RHEL\nsudo usermod -aG lp,dialout $USER',
+                '# Arch\nsudo usermod -aG lp,uucp $USER'],
+        },
+        {
+            title: "Reconnect your printer and apply changes",
+            desc: `Unplug and reconnect your printer "${printerName}". Then restart your device to apply the new group permissions.`,
         },
     ]
 }
