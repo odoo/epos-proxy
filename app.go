@@ -19,10 +19,13 @@ type App struct {
 	webserver      *server.Server
 	config         *config.Manager
 	printerManager *printer.Manager
+	allowClose     bool
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		allowClose: false,
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -158,4 +161,9 @@ func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
 
 func (a *App) CheckLANPrinterStatus(ip string) bool {
 	return printer.CheckLANPrinter(ip) == nil
+}
+
+func (a *App) Quit() {
+	a.allowClose = true
+	wailsruntime.Quit(a.ctx)
 }
