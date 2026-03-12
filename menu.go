@@ -1,6 +1,8 @@
 package main
 
 import (
+	"epos-proxy/logger"
+
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -8,6 +10,10 @@ import (
 func createMenu(app *App) *menu.Menu {
 	mainMenu := menu.NewMenu()
 	appMenu := mainMenu.AddSubmenu("App")
+
+	appMenu.AddText("Download Logs", nil, func(_ *menu.CallbackData) {
+		app.DownloadLogs()
+	})
 
 	appMenu.AddText("Quit", nil, func(_ *menu.CallbackData) {
 		handleQuit(app)
@@ -17,6 +23,8 @@ func createMenu(app *App) *menu.Menu {
 }
 
 func handleQuit(app *App) {
+	logger.Log.Debug("Quit menu item selected")
+
 	result, err := wailsruntime.MessageDialog(app.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
 		Title:         "Quit ePOS Proxy",
@@ -26,6 +34,7 @@ func handleQuit(app *App) {
 	})
 
 	if err != nil {
+		logger.Log.Errorf("Failed to show quit dialog: %v", err)
 		return
 	}
 
@@ -33,5 +42,6 @@ func handleQuit(app *App) {
 		return
 	}
 
+	logger.Log.Debug("Confirmed quit action")
 	app.Quit()
 }
