@@ -14,6 +14,7 @@ import (
 	"epos-proxy/server"
 	"epos-proxy/util"
 
+	autostart "github.com/emersion/go-autostart"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -24,12 +25,19 @@ type App struct {
 	config         *config.Manager
 	printerManager *printer.Manager
 	allowClose     bool
+	autoStart      *autostart.App
 }
 
 func NewApp() *App {
-	return &App{
-		allowClose: false,
+	a := &App{allowClose: false}
+
+	a.autoStart = &autostart.App{
+		Name:        "epos-proxy",
+		DisplayName: "ePOS Proxy",
+		Exec:        []string{os.Args[0]},
 	}
+
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -261,4 +269,32 @@ func (a *App) DownloadLogs() {
 		Title:   "Logs Downloaded",
 		Message: fmt.Sprintf("Logs saved to:\n%s", zipPath),
 	})
+}
+
+func (a *App) IsAutostartEnabled() bool {
+	return a.autoStart.IsEnabled()
+}
+
+func (a *App) EnableAutostart() error {
+	logger.Log.Info("Enabling autostart")
+
+	if runtime.GOOS == "linux" {
+		return util.EnableLinuxAutostart()
+	}
+
+	if !a.autoStart.IsEnabled() {
+		return a.autoStart.Enable()
+	}
+
+	return nil
+}
+
+func (a *App) DisableAutostart() error {
+	logger.Log.Info("Disabling autostart")
+
+	if a.autoStart.IsEnabled() {
+		return a.autoStart.Disable()
+	}
+
+	return nil
 }

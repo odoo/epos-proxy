@@ -15,11 +15,32 @@ func createMenu(app *App) *menu.Menu {
 		app.DownloadLogs()
 	})
 
+	appMenu.AddCheckbox("Auto Start", app.IsAutostartEnabled(), nil, func(cb *menu.CallbackData) {
+		handleAutoStartToggle(app, cb)
+	})
+
 	appMenu.AddText("Quit", nil, func(_ *menu.CallbackData) {
 		handleQuit(app)
 	})
 
 	return mainMenu
+}
+
+func handleAutoStartToggle(app *App, cb *menu.CallbackData) {
+	checked := cb.MenuItem.Checked
+
+	logger.Log.Infof("Auto Start toggled: %v", checked)
+
+	if checked {
+		if err := app.EnableAutostart(); err != nil {
+			logger.Log.Errorf("Failed to enable autostart: %v", err)
+		}
+		return
+	}
+
+	if err := app.DisableAutostart(); err != nil {
+		logger.Log.Errorf("Failed to disable autostart: %v", err)
+	}
 }
 
 func handleQuit(app *App) {
