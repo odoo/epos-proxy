@@ -59,6 +59,7 @@ func handleQuit(app *App) {
 		return
 	}
 
+	// linux doesnot use Buttons ovverrides and uses No | Yes for quetion dialog
 	if result != "Yes" && result != "Quit" {
 		return
 	}
