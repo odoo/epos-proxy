@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"time"
 
@@ -42,37 +41,35 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	logger.Log.Infof("Application startup")
+	logger.Debugf("Application startup")
 
 	cfg, err := config.NewManager()
 	if err != nil {
-		logger.Log.Fatalf("Config initialization failed: %v", err)
+		logger.Fatalf("Config initialization failed: %v", err)
 	}
 
 	if err := cfg.Load(); err != nil {
-		logger.Log.Warnf("Config load warning: %v", err)
+		logger.Warnf("Config load warning: %v", err)
 	}
 
-	logger.Log.Debugf("Config loaded from %s", cfg.Path())
+	logger.Debugf("Config loaded from %s", cfg.Path())
 
 	a.config = cfg
 	a.printerManager = printer.NewManager()
 
 	port, err := cfg.ResolvePort()
 	if err != nil {
-		logger.Log.Warn("Unable to resolve port, using default")
+		logger.Warn("Unable to resolve port, using default")
 	}
-
-	logger.Log.Infof("Starting proxy server on port %d", port)
 
 	a.webserver = server.New(port, a.printerManager)
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	logger.Log.Infof("Stopping proxy server")
+	logger.Infof("Stopping proxy server")
 
 	if err := a.webserver.Stop(); err != nil {
-		logger.Log.Errorf("Server stop error: %v", err)
+		logger.Errorf("Server stop error: %v", err)
 	}
 }
 
@@ -104,13 +101,13 @@ type Status struct {
 
 func (a *App) GetPrinterIp(id string) string {
 	ip := fmt.Sprintf("127.0.0.1:%d/p/%s", a.webserver.Port, id)
-	logger.Log.Debugf("Generated printer endpoint: %s", ip)
+	logger.Debugf("Generated printer endpoint: %s", ip)
 	return ip
 }
 
 func (a *App) Status() Status {
 
-	logger.Log.Debug("Collecting printer status")
+	logger.Debug("Collecting printer status")
 
 	printers := make([]Printer, 0)
 	unavailablePrinters := make([]UnavailablePrinter, 0)
@@ -120,7 +117,7 @@ func (a *App) Status() Status {
 
 	if err == nil {
 
-		logger.Log.Debugf("Detected %d available USB printers", len(printerInfos.Available))
+		logger.Debugf("Detected %d available USB printers", len(printerInfos.Available))
 
 		for _, info := range printerInfos.Available {
 			printers = append(printers, Printer{
@@ -130,7 +127,6 @@ func (a *App) Status() Status {
 				Ip:     a.GetPrinterIp(info.Id),
 				Online: true,
 			})
-			logger.Log.Infof("USB printer available: %s %s", info.VendorName, info.ProductName)
 		}
 
 		for _, info := range printerInfos.Unavailable {
@@ -139,11 +135,11 @@ func (a *App) Status() Status {
 				ErrorMsg: info.Error,
 			})
 
-			logger.Log.Warnf("USB printer unavailable: %s (%s)", info.Name, info.Error)
+			logger.Warnf("USB printer unavailable: %s (%s)", info.Name, info.Error)
 		}
 	} else {
 		errorMsg = err.Error()
-		logger.Log.Errorf("USB printer detection failed: %v", err)
+		logger.Errorf("USB printer detection failed: %v", err)
 	}
 
 	lanPrinters := printer.ListLANPrinters(a.config)
@@ -170,32 +166,29 @@ func (a *App) Status() Status {
 
 func (a *App) AddLANPrinter(ip string) error {
 
-	logger.Log.Debugf("Adding LAN printer: %s", ip)
+	logger.Debugf("Adding LAN printer: %s", ip)
 
 	ip, err := printer.ValidateIPAddress(ip)
 	if err != nil {
-		logger.Log.Warnf("Invalid printer IP: %s", ip)
-		return err
+		return fmt.Errorf("invalid IP address: %s, error: %v", ip, err)
 	}
 
 	if err := printer.CheckLANPrinter(ip); err != nil {
-		logger.Log.Errorf("LAN printer unreachable: %s", ip)
-		return fmt.Errorf("cannot connect: %w", err)
+		return fmt.Errorf("LAN printer unreachable: %s, error: %v", ip, err)
 	}
 
 	if err := a.config.AddLANPrinter(ip); err != nil {
-		logger.Log.Errorf("Failed to save LAN printer: %s", ip)
-		return err
+		return fmt.Errorf("failed to save LAN printer: %s, error: %v", ip, err)
 	}
 
-	logger.Log.Debugf("LAN printer added successfully: %s", ip)
+	logger.Debugf("LAN printer added successfully: %s", ip)
 
 	return nil
 }
 
 func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
 
-	logger.Log.Debugf("Remove LAN printer requested: %s", ip)
+	logger.Debugf("Remove LAN printer requested: %s", ip)
 
 	result, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
@@ -206,54 +199,46 @@ func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
 		CancelButton:  "Cancel",
 	})
 	if err != nil {
-		logger.Log.Errorf("Remove printer dialog failed: %v", err)
-		return false, err
+		return false, fmt.Errorf("failed to show confirmation dialog: %w", err)
 	}
 	if result == "Confirm" || result == "Yes" {
-		logger.Log.Infof("Removing LAN printer: %s", ip)
-		return true, a.config.RemoveLANPrinter(ip)
+		err := a.config.RemoveLANPrinter(ip)
+		return true, fmt.Errorf("Error removing LAN printer: %s, error: %v", ip, err)
 	}
-	logger.Log.Infof("Remove LAN printer cancelled, Remove printer dialog result: %s", result)
+	logger.Infof("Remove LAN printer cancelled, Remove printer dialog result: %s", result)
 	return false, nil
 }
 
 func (a *App) CheckLANPrinterStatus(ip string) bool {
-	logger.Log.Debugf("Checking LAN printer status: %s", ip)
+	logger.Debugf("Checking LAN printer status: %s", ip)
 	return printer.CheckLANPrinter(ip) == nil
 }
 
 func (a *App) Quit() {
-	logger.Log.Infof("Quit requested by user")
+	logger.Infof("Quit requested by user")
 	a.allowClose = true
 	wailsruntime.Quit(a.ctx)
 }
 
 func (a *App) DownloadLogs() {
-
-	logger.Log.Debug("Download logs requested")
-
-	configDir, _ := os.UserConfigDir()
-	logDir := filepath.Join(configDir, "epos-proxy", "logs")
-
-	logger.Log.Infof("Log directory: %s", logDir)
-
-	home, _ := os.UserHomeDir()
-	downloadDir := filepath.Join(home, "Downloads")
-
-	logger.Log.Infof("Download directory: %s", downloadDir)
-
+	logger.Debugf("Download logs requested")
+	logDir := logger.LogDirectory()
 	zipName := fmt.Sprintf("epos-proxy-logs-%s.zip",
 		time.Now().Format("2006-01-02"))
-
-	zipPath := filepath.Join(downloadDir, zipName)
-
-	logger.Log.Infof("Creating logs archive: %s", zipPath)
-
-	err := util.ZipLogs(logDir, zipPath)
+	logger.Debugf("Creating logs archive: %s", zipName)
+	savePath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save Archive",
+		DefaultFilename: zipName,
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "Zip Archives (*.zip)",
+				Pattern:     "*.zip",
+			},
+		},
+	})
+	err = util.ZipLogs(logDir, savePath)
 	if err != nil {
-
-		logger.Log.Errorf("Log export failed: %v", err)
-
+		logger.Errorf("Log export failed: %v", err)
 		wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
 			Type:    wailsruntime.ErrorDialog,
 			Title:   "Download Logs Failed",
@@ -261,14 +246,7 @@ func (a *App) DownloadLogs() {
 		})
 		return
 	}
-
-	logger.Log.Infof("Logs successfully exported to: %s", zipPath)
-
-	wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
-		Type:    wailsruntime.InfoDialog,
-		Title:   "Logs Downloaded",
-		Message: fmt.Sprintf("Logs saved to:\n%s", zipPath),
-	})
+	logger.Infof("Logs successfully exported to: %s", savePath)
 }
 
 func (a *App) IsAutostartEnabled() bool {
@@ -276,7 +254,7 @@ func (a *App) IsAutostartEnabled() bool {
 }
 
 func (a *App) EnableAutostart() error {
-	logger.Log.Info("Enabling autostart")
+	logger.Info("Enabling autostart")
 
 	if runtime.GOOS == "linux" {
 		return util.EnableLinuxAutostart()
@@ -290,7 +268,7 @@ func (a *App) EnableAutostart() error {
 }
 
 func (a *App) DisableAutostart() error {
-	logger.Log.Info("Disabling autostart")
+	logger.Info("Disabling autostart")
 
 	if a.autoStart.IsEnabled() {
 		return a.autoStart.Disable()

@@ -29,22 +29,22 @@ func createMenu(app *App) *menu.Menu {
 func handleAutoStartToggle(app *App, cb *menu.CallbackData) {
 	checked := cb.MenuItem.Checked
 
-	logger.Log.Infof("Auto Start toggled: %v", checked)
+	logger.Debugf("Auto Start toggled: %v", checked)
 
 	if checked {
 		if err := app.EnableAutostart(); err != nil {
-			logger.Log.Errorf("Failed to enable autostart: %v", err)
+			logger.Errorf("Failed to enable autostart: %v", err)
 		}
 		return
 	}
 
 	if err := app.DisableAutostart(); err != nil {
-		logger.Log.Errorf("Failed to disable autostart: %v", err)
+		logger.Errorf("Failed to disable autostart: %v", err)
 	}
 }
 
 func handleQuit(app *App) {
-	logger.Log.Debug("Quit menu item selected")
+	logger.Debug("Quit menu item selected")
 
 	result, err := wailsruntime.MessageDialog(app.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
@@ -55,7 +55,7 @@ func handleQuit(app *App) {
 	})
 
 	if err != nil {
-		logger.Log.Errorf("Failed to show quit dialog: %v", err)
+		logger.Errorf("Failed to show quit dialog: %v", err)
 		return
 	}
 
@@ -64,6 +64,6 @@ func handleQuit(app *App) {
 		return
 	}
 
-	logger.Log.Debug("Confirmed quit action")
+	logger.Debug("Confirmed quit action")
 	app.Quit()
 }

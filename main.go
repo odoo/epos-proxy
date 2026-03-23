@@ -23,14 +23,14 @@ var assets embed.FS
 
 func main() {
 	logger.InitLogger()
-	logger.Log.Infof("Starting ePOS Proxy")
+	logger.Debugf("Starting ePOS Proxy")
 
 	app := NewApp()
 
 	windowStartState := options.Normal
 	for _, arg := range os.Args[1:] {
 		if arg == "--minimized" {
-			logger.Log.Infof("Application started with --minimized flag")
+			logger.Debugf("Application started with --minimized flag")
 			windowStartState = options.Minimised
 			break
 		}
@@ -49,18 +49,18 @@ func main() {
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "epos-proxy-single-instance",
 			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
-				logger.Log.Warn("Second instance detected, focusing existing window")
+				logger.Warn("Second instance detected, focusing existing window")
 				wailsruntime.WindowShow(app.ctx)
 				wailsruntime.WindowUnminimise(app.ctx)
 			},
 		},
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
 			if !app.allowClose {
-				logger.Log.Infof("Close requested, hiding window instead of quitting")
+				logger.Infof("Close requested, hiding window instead of quitting")
 				wailsruntime.WindowHide(ctx)
 				return true
 			}
-			logger.Log.Infof("Application closing")
+			logger.Infof("Application closing")
 			return false
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
@@ -71,8 +71,7 @@ func main() {
 	})
 
 	if err != nil {
-		logger.Log.Error("Application crashed: ", err)
-		println("Error:", err.Error())
+		logger.Errorf("Application crashed: %v", err)
 	}
 
 }

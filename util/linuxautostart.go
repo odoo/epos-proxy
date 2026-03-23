@@ -29,22 +29,20 @@ import (
 func EnableLinuxAutostart() error {
 	exe, err := os.Executable()
 	if err != nil {
-		logger.Log.Errorf("Failed to get executable path: %v", err)
-		return err
+		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	logger.Log.Infof("Executable path detected: %s", exe)
+	logger.Debugf("Executable path detected: %s", exe)
 
 	dir := filepath.Join(os.Getenv("HOME"), ".config", "autostart")
-	logger.Log.Infof("Ensuring autostart directory exists: %s", dir)
+	logger.Infof("Ensuring autostart directory exists: %s", dir)
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		logger.Log.Errorf("Failed to create autostart directory: %v", err)
-		return err
+		return fmt.Errorf("failed to create autostart directory: %w", err)
 	}
 
 	file := filepath.Join(dir, "epos-proxy.desktop")
-	logger.Log.Infof("Creating autostart file: %s", file)
+	logger.Debugf("Creating autostart file: %s", file)
 
 	content := fmt.Sprintf(`[Desktop Entry]
 Type=Application
@@ -56,10 +54,9 @@ X-GNOME-Autostart-enabled=true
 `, exe)
 
 	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
-		logger.Log.Errorf("Failed to write autostart file: %v", err)
-		return err
+		return fmt.Errorf("failed to write autostart file: %w", err)
 	}
 
-	logger.Log.Info("Linux autostart successfully enabled")
+	logger.Info("Linux autostart successfully enabled")
 	return nil
 }

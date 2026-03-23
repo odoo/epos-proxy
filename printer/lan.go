@@ -25,11 +25,11 @@ func CheckLANPrinter(ip string) error {
 	addr := fmt.Sprintf("%s:%d", ip, LANPort)
 	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
 	if err != nil {
-		logger.Log.Debugf("LAN printer %s is offline or unreachable: %v", ip, err)
+		logger.Debugf("LAN printer %s is offline or unreachable: %v", ip, err)
 		return err
 	}
 	_ = conn.Close()
-	logger.Log.Debugf("Successfully connected to LAN printer %s", ip)
+	logger.Debugf("Successfully connected to LAN printer %s", ip)
 	return nil
 }
 
@@ -56,7 +56,7 @@ func DecodeLANPrinterID(id string) (string, bool) {
 
 func ListLANPrinters(cfg *config.Manager) []LANPrinterInfo {
 	ips := cfg.GetLANPrinters()
-	logger.Log.Debugf("Listing %d configured LAN printers", len(ips))
+	logger.Debugf("Listing %d configured LAN printers", len(ips))
 	result := make([]LANPrinterInfo, len(ips))
 
 	for i, ip := range ips {
@@ -72,13 +72,12 @@ func ListLANPrinters(cfg *config.Manager) []LANPrinterInfo {
 func ValidateIPAddress(ip string) (string, error) {
 	ip = strings.TrimSpace(ip)
 	if ip == "" {
-		logger.Log.Warn("Attempted to validate empty IP address")
 		return "", fmt.Errorf("IP address cannot be empty")
 	}
 
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
-		logger.Log.Warnf("Invalid IP address format for input: %s", ip)
+		logger.Warnf("Invalid IP address format for input: %s", ip)
 		return "", fmt.Errorf("invalid IP address format")
 	}
 

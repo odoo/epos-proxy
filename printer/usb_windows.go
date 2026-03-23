@@ -18,7 +18,7 @@ type Win32_PnPEntity struct {
 }
 
 func getPrinterFriendlyName(vid, pid string) string {
-	logger.Log.Debugf("Attempting to get name for VID:%s PID:%s", vid, pid)
+	logger.Debugf("Attempting to get name for VID:%s PID:%s", vid, pid)
 	name, _, _ := findPnPDeviceNameByVidPid(vid, pid)
 
 	// If WMI returned something useful (not generic "USB..." name) use it
@@ -27,11 +27,11 @@ func getPrinterFriendlyName(vid, pid string) string {
 	}
 
 	// Fallback: look up clean model name from USBPRINT registry
-	logger.Log.Debug("Falling back to registry lookup for printer friendly name")
+	logger.Debug("Falling back to registry lookup for printer friendly name")
 	if regName := findUSBPrintModel(vid, pid); regName != "" {
 		return regName
 	}
-	logger.Log.Debug("Using generic name for printer")
+	logger.Debug("Using generic name for printer")
 
 	return fmt.Sprintf("USB ID: %s %s", vid, pid)
 }
@@ -48,7 +48,7 @@ func findPnPDeviceNameByVidPid(vid, pid string) (string, string, error) {
 
 	var entities []Win32_PnPEntity
 
-	logger.Log.Debugf("Querying WMI for device with VID_%s", vid)
+	logger.Debugf("Querying WMI for device with VID_%s", vid)
 	q := fmt.Sprintf("SELECT Name, DeviceID FROM Win32_PnPEntity WHERE DeviceID LIKE '%%VID_%s%%'", vid)
 	if err := wmi.Query(q, &entities); err != nil {
 		return "", "", fmt.Errorf("WMI query failed: %w", err)
@@ -59,7 +59,7 @@ func findPnPDeviceNameByVidPid(vid, pid string) (string, string, error) {
 	needleConcat := "VID_" + vid + "&PID_" + pid
 
 	for _, e := range entities {
-		logger.Log.Debugf("Checking WMI entity: Name=%s, DeviceID=%s", e.Name, e.DeviceID)
+		logger.Debugf("Checking WMI entity: Name=%s, DeviceID=%s", e.Name, e.DeviceID)
 		id := strings.ToUpper(e.DeviceID)
 		if strings.Contains(id, needleConcat) {
 			return e.Name, e.DeviceID, nil
@@ -68,7 +68,7 @@ func findPnPDeviceNameByVidPid(vid, pid string) (string, string, error) {
 			return e.Name, e.DeviceID, nil
 		}
 	}
-	logger.Log.Debugf("No matching WMI entity found for VID:%s PID:%s", vid, pid)
+	logger.Debugf("No matching WMI entity found for VID:%s PID:%s", vid, pid)
 
 	return "", "", nil
 }
@@ -85,17 +85,17 @@ func findUSBPrintModel(vid, pid string) string {
 	if prefix == "" {
 		return ""
 	}
-	logger.Log.Debugf("Found ParentIdPrefix: %s for VID:%s PID:%s", prefix, vid, pid)
+	logger.Debugf("Found ParentIdPrefix: %s for VID:%s PID:%s", prefix, vid, pid)
 	prefixUpper := strings.ToUpper(prefix)
 
-	logger.Log.Debug("Opening registry key for USBPRINT models")
+	logger.Debug("Opening registry key for USBPRINT models")
 	root, err := registry.OpenKey(
 		registry.LOCAL_MACHINE,
 		`SYSTEM\CurrentControlSet\Enum\USBPRINT`,
 		registry.ENUMERATE_SUB_KEYS,
 	)
 	if err != nil {
-		logger.Log.Errorf("Failed to open USBPRINT registry key: %v", err)
+		logger.Errorf("Failed to open USBPRINT registry key: %v", err)
 		return ""
 	}
 	defer root.Close()
@@ -104,14 +104,14 @@ func findUSBPrintModel(vid, pid string) string {
 	for _, model := range models {
 		modelKey, err := registry.OpenKey(root, model, registry.ENUMERATE_SUB_KEYS)
 		if err != nil {
-			logger.Log.Warnf("Failed to open registry subkey %s: %v", model, err)
+			logger.Warnf("Failed to open registry subkey %s: %v", model, err)
 			continue
 		}
 		instances, _ := modelKey.ReadSubKeyNames(-1)
 		modelKey.Close()
 
 		for _, instance := range instances {
-			logger.Log.Debugf("Checking USBPRINT instance %s for prefix %s", instance, prefixUpper)
+			logger.Debugf("Checking USBPRINT instance %s for prefix %s", instance, prefixUpper)
 			if strings.HasPrefix(strings.ToUpper(instance), prefixUpper) {
 				return model // e.g. "EPSONTM-T30II" — clean, no AC25 suffix
 			}
@@ -127,14 +127,14 @@ func readParentIdPrefix(vid, pid string) string {
 		`SYSTEM\CurrentControlSet\Enum\USB\VID_%s&PID_%s`,
 		vid, pid,
 	)
-	logger.Log.Debugf("Opening registry key for USB device: %s", keyPath)
+	logger.Debugf("Opening registry key for USB device: %s", keyPath)
 	devKey, err := registry.OpenKey(
 		registry.LOCAL_MACHINE,
 		keyPath,
 		registry.ENUMERATE_SUB_KEYS,
 	)
 	if err != nil {
-		logger.Log.Warnf("Failed to open USB device registry key %s: %v", keyPath, err)
+		logger.Warnf("Failed to open USB device registry key %s: %v", keyPath, err)
 		return ""
 	}
 	defer devKey.Close()
@@ -143,7 +143,7 @@ func readParentIdPrefix(vid, pid string) string {
 	for _, instance := range instances {
 		instKey, err := registry.OpenKey(devKey, instance, registry.QUERY_VALUE)
 		if err != nil {
-			logger.Log.Warnf("Failed to open instance registry key %s\\%s: %v", keyPath, instance, err)
+			logger.Warnf("Failed to open instance registry key %s\\%s: %v", keyPath, instance, err)
 			continue
 		}
 		flags, _, _ := instKey.GetIntegerValue("ConfigFlags")
@@ -151,7 +151,7 @@ func readParentIdPrefix(vid, pid string) string {
 		instKey.Close()
 
 		if err == nil && prefix != "" && flags == 0 {
-			logger.Log.Debugf("Found ParentIdPrefix %s for instance %s\\%s", prefix, keyPath, instance)
+			logger.Debugf("Found ParentIdPrefix %s for instance %s\\%s", prefix, keyPath, instance)
 			return prefix
 		}
 	}
