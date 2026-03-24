@@ -20,7 +20,8 @@ func createMenu(app *App) *menu.Menu {
 	})
 
 	appMenu.AddText("Quit", nil, func(_ *menu.CallbackData) {
-		handleQuit(app)
+		logger.Infof("Quit requested by user")
+		wailsruntime.Quit(app.ctx)
 	})
 
 	return mainMenu
@@ -43,9 +44,7 @@ func handleAutoStartToggle(app *App, cb *menu.CallbackData) {
 	}
 }
 
-func handleQuit(app *App) {
-	logger.Debug("Quit menu item selected")
-
+func (app *App) ConfirmQuit() bool {
 	result, err := wailsruntime.MessageDialog(app.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
 		Title:         "Quit ePOS Proxy",
@@ -56,14 +55,14 @@ func handleQuit(app *App) {
 
 	if err != nil {
 		logger.Errorf("Failed to show quit dialog: %v", err)
-		return
+		return false
 	}
 
-	// linux doesnot use Buttons ovverrides and uses No | Yes for quetion dialog
+	// linux doesn't use Buttons overrides and uses No | Yes for question dialog
 	if result != "Yes" && result != "Quit" {
-		return
+		return false
 	}
 
 	logger.Debug("Confirmed quit action")
-	app.Quit()
+	return true
 }

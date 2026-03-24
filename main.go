@@ -55,13 +55,14 @@ func main() {
 			},
 		},
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
-			if !app.allowClose {
-				logger.Infof("Close requested, hiding window instead of quitting")
-				wailsruntime.WindowHide(ctx)
-				return true
+			if app.ConfirmQuit() {
+				logger.Infof("User confirmed quit")
+				return false
 			}
-			logger.Infof("Application closing")
-			return false
+
+			logger.Infof("Close requested, minimizing window instead of quitting")
+			wailsruntime.WindowMinimise(ctx)
+			return true
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        app.startup,

@@ -23,12 +23,11 @@ type App struct {
 	webserver      *server.Server
 	config         *config.Manager
 	printerManager *printer.Manager
-	allowClose     bool
 	autoStart      *autostart.App
 }
 
 func NewApp() *App {
-	a := &App{allowClose: false}
+	a := &App{}
 
 	a.autoStart = &autostart.App{
 		Name:        "epos-proxy",
@@ -212,12 +211,6 @@ func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
 func (a *App) CheckLANPrinterStatus(ip string) bool {
 	logger.Debugf("Checking LAN printer status: %s", ip)
 	return printer.CheckLANPrinter(ip) == nil
-}
-
-func (a *App) Quit() {
-	logger.Infof("Quit requested by user")
-	a.allowClose = true
-	wailsruntime.Quit(a.ctx)
 }
 
 func (a *App) DownloadLogs() {
