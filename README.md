@@ -28,9 +28,6 @@ Download the latest release for your platform from the [Releases](../../releases
 ### Linux
 
 Before running the application, you may need to make it executable and install a required dependency.
-```
-
-**Install the required WebKit dependency:**
 ```bash
 sudo apt update
 sudo apt install libwebkit2gtk-4.1-0
