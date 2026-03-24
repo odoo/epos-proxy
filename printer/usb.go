@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"epos-proxy/logger"
+
 	"github.com/google/gousb"
 )
 
@@ -45,6 +47,7 @@ type Printers struct {
 }
 
 func ListUSBPrinters() (*Printers, error) {
+	logger.Debug("Starting USB printer detection")
 	ctx := gousb.NewContext()
 	defer func(ctx *gousb.Context) {
 		_ = ctx.Close()
@@ -62,7 +65,7 @@ func ListUSBPrinters() (*Printers, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open USB devices for listing: %w", err)
 	}
 
 	result := &Printers{
@@ -80,6 +83,7 @@ func ListUSBPrinters() (*Printers, error) {
 				Error: err.Error(),
 			})
 		} else if info != nil {
+			logger.Infof("Found available USB printer: %s (Serial: %s)", info.ProductName, info.Serial)
 			result.Available = append(result.Available, *info)
 		}
 	}
@@ -88,6 +92,7 @@ func ListUSBPrinters() (*Printers, error) {
 }
 
 func GetPrinterInfo(ctx *gousb.Context, descToFind *gousb.DeviceDesc) (*Info, error) {
+	logger.Debugf("Attempting to get info for USB device: Bus %d, Address %d, Vendor %04X, Product %04X", descToFind.Bus, descToFind.Address, uint16(descToFind.Vendor), uint16(descToFind.Product))
 	var found bool
 	devices, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		if found {
@@ -102,7 +107,7 @@ func GetPrinterInfo(ctx *gousb.Context, descToFind *gousb.DeviceDesc) (*Info, er
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open USB device for info retrieval: %w", err)
 	}
 
 	if len(devices) == 0 {

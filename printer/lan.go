@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"epos-proxy/config"
+	"epos-proxy/logger"
 )
 
 const (
@@ -24,10 +25,11 @@ func CheckLANPrinter(ip string) error {
 	addr := fmt.Sprintf("%s:%d", ip, LANPort)
 	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
 	if err != nil {
-		//log.Info("LAN printer %s is offline: %v", ip, err)
+		logger.Debugf("LAN printer %s is offline or unreachable: %v", ip, err)
 		return err
 	}
 	_ = conn.Close()
+	logger.Debugf("Successfully connected to LAN printer %s", ip)
 	return nil
 }
 
@@ -54,6 +56,7 @@ func DecodeLANPrinterID(id string) (string, bool) {
 
 func ListLANPrinters(cfg *config.Manager) []LANPrinterInfo {
 	ips := cfg.GetLANPrinters()
+	logger.Debugf("Listing %d configured LAN printers", len(ips))
 	result := make([]LANPrinterInfo, len(ips))
 
 	for i, ip := range ips {
@@ -74,6 +77,7 @@ func ValidateIPAddress(ip string) (string, error) {
 
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
+		logger.Warnf("Invalid IP address format for input: %s", ip)
 		return "", fmt.Errorf("invalid IP address format")
 	}
 

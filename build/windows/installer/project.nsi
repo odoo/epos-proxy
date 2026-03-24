@@ -90,8 +90,7 @@ Section
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortcut "$SMSTARTUP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "--minimized" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0 SW_SHOWMINIMIZED
-
+    
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 

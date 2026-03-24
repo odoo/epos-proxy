@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"epos-proxy/logger"
+
 	"github.com/google/gousb"
 )
 
@@ -78,6 +80,7 @@ func newPrinter(id string) *Printer {
 		jobs:        make(chan job, QueueSize),
 	}
 
+	logger.Debugf("Created new LAN printer instance for IP: %s", p.idToString())
 	go p.loop()
 	return p
 }
@@ -86,8 +89,10 @@ func (p *Printer) Enqueue(fn JobFunc, reply chan JobResult) error {
 	j := job{run: fn, reply: reply}
 	select {
 	case p.jobs <- j:
+		logger.Debugf("Enqueued print job for printer %s", p.idToString())
 		return nil
 	default:
+		logger.Warnf("Printer queue full for printer %s", p.idToString())
 		return ErrQueueFull
 	}
 }
@@ -99,31 +104,35 @@ func (p *Printer) Write(data []byte) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	logger.Debugf("Writing %d bytes to printer %s", len(data), p.idToString())
 
 	if p.printerType == PrinterTypeLAN {
 		if err := p.tcpConn.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
 			p.closeDeviceLocked()
-			return err
+			return fmt.Errorf("failed to set write deadline for LAN printer %s: %w", p.idToString(), err)
 		}
 		if _, err := p.tcpConn.Write(data); err != nil {
 			p.closeDeviceLocked()
-			return err
+			return fmt.Errorf("failed to write to LAN printer %s: %w", p.idToString(), err)
 		}
+		logger.Debugf("Successfully wrote to LAN printer %s", p.idToString())
 		return nil
 	}
 
 	// USB write
 	ctx, cancel := context.WithTimeout(context.Background(), WriteTimeout)
 	defer cancel()
+	logger.Debugf("Writing to USB printer %s with timeout %v", p.idToString(), WriteTimeout)
 
 	if _, err := p.outEndpoint.WriteContext(ctx, data); err != nil {
 		p.closeDeviceLocked()
-		return err
+		return fmt.Errorf("failed to write to USB printer %s: %w", p.idToString(), err)
 	}
 	return nil
 }
 
 func (p *Printer) loop() {
+	logger.Debugf("Printer loop started for %s with %d jobs", p.idToString(), len(p.jobs))
 	for j := range p.jobs {
 		result := j.run(p)
 		if j.reply != nil {
@@ -147,12 +156,15 @@ func (p *Printer) ensureOpen() error {
 
 func (p *Printer) ensureOpenLANLocked() error {
 	if p.tcpConn != nil {
+		logger.Debugf("LAN printer %s already connected", p.idToString())
 		return nil // already connected
 	}
 
 	addr := fmt.Sprintf("%s:%d", p.lanIP, LANPort)
+	logger.Debugf("Attempting to connect to LAN printer %s at %s", p.idToString(), addr)
 	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
 	if err != nil {
+		logger.Errorf("Failed to connect to LAN printer %s at %s: %v", p.idToString(), addr, err)
 		return fmt.Errorf("failed to connect to LAN printer at %s: %w", addr, err)
 	}
 
@@ -162,6 +174,7 @@ func (p *Printer) ensureOpenLANLocked() error {
 
 func (p *Printer) ensureOpenUSBLocked() error {
 	if p.device != nil {
+		logger.Debugf("USB printer %s already connected", p.idToString())
 		return nil // already connected
 	}
 
@@ -185,10 +198,11 @@ func (p *Printer) ensureOpenUSBLocked() error {
 	})
 	if err != nil {
 		_ = ctx.Close()
-		return err
+		return fmt.Errorf("failed to open USB device for printer %s: %w", p.idToString(), err)
 	}
 	if len(devices) == 0 {
 		_ = ctx.Close()
+		logger.Warnf("USB printer %s not found", p.idToString())
 		return ErrNotFound
 	}
 
@@ -229,6 +243,7 @@ func (p *Printer) ensureOpenUSBLocked() error {
 		_ = target.SetAutoDetach(false)
 		cfg, err = target.Config(targetEP.config)
 	}
+	logger.Debugf("Configuring USB device %s", p.idToString())
 	if err != nil {
 		_ = target.Close()
 		_ = ctx.Close()
@@ -237,6 +252,7 @@ func (p *Printer) ensureOpenUSBLocked() error {
 
 	iFace, err := cfg.Interface(targetEP.iFace, targetEP.alternateSetting)
 	if err != nil {
+		logger.Errorf("Failed to claim USB interface for printer %s: Error: %v", p.idToString(), err)
 		_ = cfg.Close()
 		_ = target.Close()
 		_ = ctx.Close()
@@ -245,6 +261,7 @@ func (p *Printer) ensureOpenUSBLocked() error {
 
 	ep, err := iFace.OutEndpoint(targetEP.outEndpoint)
 	if err != nil {
+		logger.Errorf("Failed to get USB out endpoint for printer %s: Error: %v", p.idToString(), err)
 		iFace.Close()
 		_ = cfg.Close()
 		_ = target.Close()
@@ -262,6 +279,7 @@ func (p *Printer) ensureOpenUSBLocked() error {
 
 func (p *Printer) close() {
 	p.mu.Lock()
+	logger.Debugf("Closing printer %s", p.idToString())
 	defer p.mu.Unlock()
 	p.closeDeviceLocked()
 }
@@ -271,6 +289,7 @@ func (p *Printer) closeDeviceLocked() {
 		if p.tcpConn != nil {
 			_ = p.tcpConn.Close()
 			p.tcpConn = nil
+			logger.Debugf("LAN printer %s connection closed", p.idToString())
 		}
 		return
 	}
@@ -288,4 +307,15 @@ func (p *Printer) closeDeviceLocked() {
 	p.iFace = nil
 	p.outEndpoint = nil
 	p.usbCtx = nil
+	logger.Debugf("USB printer %s device closed", p.idToString())
+}
+
+func (p *Printer) idToString() string {
+	if p.printerType == PrinterTypeLAN {
+		return fmt.Sprintf("LAN:%s", p.lanIP)
+	}
+	if p.id != nil {
+		return fmt.Sprintf("USB:%s", p.id.Serial)
+	}
+	return "USB:unknown"
 }
