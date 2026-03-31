@@ -3,10 +3,9 @@
 package printer
 
 import (
+	"epos-proxy/logger"
 	"fmt"
 	"strings"
-
-	"epos-proxy/logger"
 
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/registry"

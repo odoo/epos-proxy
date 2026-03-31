@@ -134,7 +134,7 @@ func (cm *Manager) ResolvePort() (int, error) {
 	return port, nil
 }
 
-func (cm *Manager) AddLANPrinter(ip string) error {
+func (cm *Manager) AddLanEposPrinter(ip string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 

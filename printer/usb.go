@@ -1,50 +1,13 @@
 package printer
 
 import (
-	"encoding/base64"
-	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"epos-proxy/logger"
+	"epos-proxy/util"
 
 	"github.com/google/gousb"
 )
-
-var supportedVendorIDs = map[gousb.ID]string{
-	0x04B8: "Epson",
-}
-
-type Info struct {
-	ProductName string
-	VendorName  string
-	Serial      string
-	Id          string
-}
-
-type UnavailableInfo struct {
-	Name  string
-	Error string
-}
-
-type EndpointInfo struct {
-	config           int
-	iFace            int
-	alternateSetting int
-	outEndpoint      int
-}
-
-type PrinterID struct {
-	Serial    string
-	ProductID gousb.ID
-	VendorID  gousb.ID
-}
-
-type Printers struct {
-	Available   []Info
-	Unavailable []UnavailableInfo
-}
 
 func ListUSBPrinters() (*Printers, error) {
 	logger.Debug("Starting USB printer detection")
@@ -83,7 +46,7 @@ func ListUSBPrinters() (*Printers, error) {
 				Error: err.Error(),
 			})
 		} else if info != nil {
-			logger.Infof("Found available USB printer: %s (Serial: %s)", info.ProductName, info.Serial)
+			logger.Debugf("Found available USB printer: %s (Serial: %s)", info.ProductName, info.Serial)
 			result.Available = append(result.Available, *info)
 		}
 	}
@@ -122,86 +85,23 @@ func GetPrinterInfo(ctx *gousb.Context, descToFind *gousb.DeviceDesc) (*Info, er
 
 	device := devices[0]
 	info := &Info{}
-	info.ProductName, _ = device.Product()
+	productName, _ := device.Product()
+	vendorName, _ := device.Manufacturer()
 
-	if info.ProductName == "" {
-		info.ProductName = fmt.Sprintf("PID: %04X", uint16(descToFind.Product))
-	}
-
-	info.VendorName, _ = device.Manufacturer()
-
-	if info.VendorName == "" {
-		info.VendorName = fmt.Sprintf("VID: %04X", uint16(descToFind.Vendor))
-	}
-
+	info.ProductName = util.Ternary(productName == "", fmt.Sprintf("PID: %04X", uint16(descToFind.Product)), productName)
+	info.VendorName = util.Ternary(vendorName == "", fmt.Sprintf("VID: %04X", uint16(descToFind.Vendor)), vendorName)
 	info.Serial, _ = device.SerialNumber()
-	info.Id = encodePrinterID(info.Serial, descToFind.Vendor, descToFind.Product)
+	info.Path = pathToString(descToFind)
+	id, err := encodePrinterID(info.Serial, info.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode printer ID: %w", err)
+	}
+	info.Id = id
 	return info, nil
 
 }
 
-func encodePrinterID(serial string, vendorID gousb.ID, productID gousb.ID) string {
-	if serial != "" {
-		return base64.RawURLEncoding.EncodeToString([]byte("s:" + serial))
-	}
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("p:%04X:%04X", uint16(vendorID), uint16(productID))))
-}
-
-var ErrInvalidPrinterID = errors.New("invalid printer ID format")
-
-func decodePrinterID(id string) (*PrinterID, error) {
-
-	decoded, err := base64.RawURLEncoding.DecodeString(id)
-	if err != nil {
-		return nil, ErrInvalidPrinterID
-	}
-
-	if len(decoded) < 3 || decoded[1] != ':' {
-		return nil, ErrInvalidPrinterID
-	}
-
-	kind := decoded[0]
-	payload := decoded[2:]
-
-	switch kind {
-	case 's':
-		if len(payload) == 0 {
-			return nil, ErrInvalidPrinterID
-		}
-		return &PrinterID{Serial: string(payload)}, nil
-
-	case 'p':
-		// Expect payload: "<vendor>:<product>"
-		vStr, pStr, ok := strings.Cut(string(payload), ":")
-		if !ok || vStr == "" || pStr == "" {
-			return nil, ErrInvalidPrinterID
-		}
-
-		v, err := strconv.ParseUint(vStr, 16, 16)
-		if err != nil {
-			return nil, ErrInvalidPrinterID
-		}
-		p, err := strconv.ParseUint(pStr, 16, 16)
-		if err != nil {
-			return nil, ErrInvalidPrinterID
-		}
-
-		return &PrinterID{
-			VendorID:  gousb.ID(v),
-			ProductID: gousb.ID(p),
-		}, nil
-
-	default:
-		return nil, ErrInvalidPrinterID
-	}
-}
-
 func findPrinterEndpoint(dev *gousb.DeviceDesc) (EndpointInfo, bool) {
-	// _, supportedVendor := supportedVendorIDs[dev.Vendor]
-	// if !supportedVendor {
-	//	return EndpointInfo{}, false
-	//}
-
 	for cfgNum, cfg := range dev.Configs {
 		for _, iFace := range cfg.Interfaces {
 			for _, alt := range iFace.AltSettings {

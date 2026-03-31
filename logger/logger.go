@@ -17,7 +17,7 @@ func InitLogger() {
 	if err != nil {
 		Fatalf("Failed to get user config dir: %v", err)
 	}
-	logDir = filepath.Join(dir, "epos-proxy", "logs")
+	logDir = filepath.Join(dir, "EposProxy", "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		Fatalf("Failed to create log directory: %v", err)
 	}

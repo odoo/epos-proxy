@@ -176,7 +176,7 @@ func (a *App) AddLANPrinter(ip string) error {
 		return fmt.Errorf("LAN printer unreachable: %s, error: %v", ip, err)
 	}
 
-	if err := a.config.AddLANPrinter(ip); err != nil {
+	if err := a.config.AddLanEposPrinter(ip); err != nil {
 		return fmt.Errorf("failed to save LAN printer: %s, error: %v", ip, err)
 	}
 
