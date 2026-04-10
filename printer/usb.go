@@ -17,12 +17,15 @@ func ListUSBPrinters() (*Printers, error) {
 
 	}(ctx)
 
+	current := make(map[string]struct{})
+
 	// First list all  without opening devices, to avoid permission errors on some platforms
 	var descriptors []gousb.DeviceDesc
 	_, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
-		_, supported := findPrinterEndpoint(desc)
-		if supported {
+		if _, supported := findPrinterEndpoint(desc); supported {
 			descriptors = append(descriptors, *desc)
+			key := fingerprintKey(desc)
+			current[key] = struct{}{}
 		}
 		return false
 	})
@@ -30,6 +33,17 @@ func ListUSBPrinters() (*Printers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open USB devices for listing: %w", err)
 	}
+
+	if !usbCache.HasChanged(current) {
+		logger.Debugf("USB unchanged → using cache")
+		availablePrinters, unavailablePrinters := usbCache.Get()
+		return &Printers{
+			Available:   availablePrinters,
+			Unavailable: unavailablePrinters,
+		}, nil
+	}
+
+	logger.Infof("USB changed → rescanning devices")
 
 	result := &Printers{
 		Available:   make([]Info, 0),
@@ -50,6 +64,8 @@ func ListUSBPrinters() (*Printers, error) {
 			result.Available = append(result.Available, *info)
 		}
 	}
+
+	usbCache.Update(current, result.Available, result.Unavailable)
 
 	return result, nil
 }
@@ -99,6 +115,15 @@ func GetPrinterInfo(ctx *gousb.Context, descToFind *gousb.DeviceDesc) (*Info, er
 	info.Id = id
 	return info, nil
 
+}
+
+func fingerprintKey(desc *gousb.DeviceDesc) string {
+	return fmt.Sprintf("%d-%d-%04X:%04X",
+		desc.Bus,
+		desc.Address,
+		desc.Vendor,
+		desc.Product,
+	)
 }
 
 func findPrinterEndpoint(dev *gousb.DeviceDesc) (EndpointInfo, bool) {

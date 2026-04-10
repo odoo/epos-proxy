@@ -201,8 +201,10 @@ func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
 		return false, fmt.Errorf("failed to show confirmation dialog: %w", err)
 	}
 	if result == "Confirm" || result == "Yes" {
-		err := a.config.RemoveLANPrinter(ip)
-		return true, fmt.Errorf("Error removing LAN printer: %s, error: %v", ip, err)
+		if err := a.config.RemoveLANPrinter(ip); err != nil {
+			return false, fmt.Errorf("failed to remove LAN printer: %w", err)
+		}
+		return true, nil
 	}
 	logger.Infof("Remove LAN printer cancelled, Remove printer dialog result: %s", result)
 	return false, nil
