@@ -9,7 +9,7 @@
         leave-to-class="opacity-0"
     >
       <div v-if="show" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/75" @click="close"/>
+        <div class="absolute inset-0 bg-black/50" @click="close"/>
         <div class="relative bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden p-6">
 
           <div class="flex items-center justify-between mb-4">
