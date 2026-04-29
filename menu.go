@@ -19,6 +19,10 @@ func createMenu(app *App) *menu.Menu {
 		handleAutoStartToggle(app, cb)
 	})
 
+	appMenu.AddText("About", nil, func(_ *menu.CallbackData) {
+		showAboutDialog(app)
+	})
+
 	appMenu.AddText("Quit", nil, func(_ *menu.CallbackData) {
 		logger.Infof("Quit requested by user")
 		wailsruntime.Quit(app.ctx)
@@ -65,4 +69,21 @@ func (app *App) ConfirmQuit() bool {
 
 	logger.Debug("Confirmed quit action")
 	return true
+}
+
+func showAboutDialog(app *App) {
+	message := "ePOS Proxy\n\n" +
+		"Version: " + Version + "\n" +
+		"Build Time: " + BuildTime + "\n" +
+		"Commit: " + Commit
+
+	_, err := wailsruntime.MessageDialog(app.ctx, wailsruntime.MessageDialogOptions{
+		Type:    wailsruntime.InfoDialog,
+		Title:   "About ePOS Proxy",
+		Message: message,
+	})
+
+	if err != nil {
+		logger.Errorf("Failed to show about dialog: %v", err)
+	}
 }

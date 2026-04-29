@@ -3,10 +3,11 @@
 package printer
 
 import (
-	"fmt"
-	"strings"
-
 	"epos-proxy/logger"
+	"epos-proxy/util"
+	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/registry"
@@ -156,4 +157,140 @@ func readParentIdPrefix(vid, pid string) string {
 		}
 	}
 	return ""
+}
+
+type Win32_Printer struct {
+	Name        string
+	DeviceID    string
+	WorkOffline bool
+	PortName    string
+}
+
+func listSystemPrinters() ([]SystemUsbPrinter, error) {
+	var printersWMI []Win32_Printer
+
+	// SELECT Name, DeviceID, PortName, Network, Local, Shared FROM Win32_Printer
+	query := "SELECT Name, DeviceID, WorkOffline, PortName FROM Win32_Printer"
+	if err := wmi.Query(query, &printersWMI); err != nil {
+		return nil, err
+	}
+
+	var printers []SystemUsbPrinter
+	for _, p := range printersWMI {
+		if p.WorkOffline {
+			continue
+		}
+
+		isLAN := strings.HasPrefix(p.Name, "PDF_NETWORK_")
+		info := SystemUsbPrinter{
+			Serial:   "",
+			IdName:   p.Name,
+			DeviceID: p.DeviceID,
+			Label:    classifyPort(p.PortName),
+			Type:     TypeOFFICE,
+			IsLAN:    isLAN,
+			IP:       util.Ternary(isLAN, strings.TrimPrefix(p.Name, "PDF_NETWORK_"), ""),
+		}
+		printers = append(printers, info)
+	}
+
+	return printers, nil
+}
+
+func classifyPort(portName string) string {
+	port := strings.ToUpper(strings.TrimSpace(portName))
+
+	// --- VIRTUAL ---
+	if port == "PORTPROMPT:" || port == "NUL:" || port == "FILE:" {
+		return "VIRTUAL"
+	}
+
+	// --- USB ---
+	if strings.HasPrefix(port, "USB") {
+		return "USB"
+	}
+
+	// --- NETWORK ---
+	if strings.HasPrefix(port, "WSD") ||
+		strings.HasPrefix(port, "IP_") ||
+		strings.HasPrefix(port, "\\\\") ||
+		strings.HasPrefix(port, "HTTP") ||
+		strings.HasPrefix(port, "IPP") ||
+		strings.HasPrefix(port, "LPR") ||
+		strings.HasPrefix(port, "RAW") {
+		return "NETWORK"
+	}
+
+	return ""
+}
+
+func DeleteSystemPrinter(name string) error {
+	cmd := exec.Command("powershell", "-Command", "Remove-Printer -Name \""+name+"\"")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete printer %s: %v (%s)", name, err, string(out))
+	}
+
+	return nil
+}
+
+func AddLanOfficePrinter(ip string) error {
+	portName := fmt.Sprintf("IP_%s", ip)
+	printerName := fmt.Sprintf("PDF_NETWORK_%s", ip)
+
+	if printerPortExists(portName) {
+		return fmt.Errorf("printer port %s already exists", portName)
+	}
+
+	if printerExists(printerName) {
+		return fmt.Errorf("printer %s already exists", printerName)
+	}
+
+	cmd1 := exec.Command("powershell",
+		"-Command",
+		fmt.Sprintf(`Add-PrinterPort -Name "%s" -PrinterHostAddress "%s"`, portName, ip),
+	)
+
+	if output, err := cmd1.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add port: %s (%v)", string(output), err)
+	}
+
+	cmd2 := exec.Command("powershell",
+		"-Command",
+		fmt.Sprintf(`Add-Printer -Name "%s" -DriverName "Microsoft IPP Class Driver" -PortName "%s"`, printerName, portName),
+	)
+
+	if output, err := cmd2.CombinedOutput(); err != nil {
+
+		if rmErr := removePrinterPort(portName); rmErr != nil {
+			return fmt.Errorf("failed to add printer: %s (%v); cleanup failed: %v", string(output), err, rmErr)
+		}
+
+		return fmt.Errorf("failed to add printer: %s (%v)", string(output), err)
+	}
+
+	return nil
+}
+
+func removePrinterPort(name string) error {
+	cmd := exec.Command("powershell",
+		"-Command",
+		fmt.Sprintf(`Remove-PrinterPort -Name "%s"`, name),
+	)
+	return cmd.Run()
+}
+
+func printerPortExists(name string) bool {
+	out, _ := exec.Command("powershell", "-NoProfile", "-Command",
+		fmt.Sprintf(`Get-PrinterPort -Name "%s" -ErrorAction SilentlyContinue | Out-String`, name)).CombinedOutput()
+
+	return strings.TrimSpace(string(out)) != ""
+}
+
+func printerExists(name string) bool {
+	out, _ := exec.Command("powershell", "-NoProfile", "-Command",
+		fmt.Sprintf(`Get-Printer -Name "%s" -ErrorAction SilentlyContinue | Out-String`, name)).CombinedOutput()
+
+	return strings.TrimSpace(string(out)) != ""
 }

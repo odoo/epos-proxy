@@ -39,12 +39,25 @@ func New(port int, mgr *printer.Manager) *Server {
 	app.Post("/p/:printerId/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
 		printerId := ctx.Params("printerId")
 		logger.Debugf("Print request received for printer: %s", printerId)
-		return printData(mgr, ctx, printerId)
+		return printData(mgr, ctx, printer.RawPrinter{Category: printer.PrinterThermal, PrinterIp: printerId})
 	})
 
 	app.Post("/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
 		logger.Debugf("Print request received (auto printer selection)")
-		return printData(mgr, ctx, "")
+		return printData(mgr, ctx, printer.RawPrinter{Category: printer.PrinterOffice, PrinterIp: ""})
+	})
+
+	app.Post("/p/:printerId/print/pdf", func(ctx fiber.Ctx) error {
+		printerId := ctx.Params("printerId")
+		rawPrinter := printer.RawPrinter{Category: printer.PrinterOffice, PrinterIp: printerId}
+		logger.Debugf("Print request received for printer: %v", rawPrinter)
+
+		if duplex := ctx.Query("duplex"); duplex == "true" {
+			rawPrinter.PrintType = printer.DUPLEX
+		} else {
+			rawPrinter.PrintType = printer.SINGLE
+		}
+		return printPDF(mgr, ctx, rawPrinter)
 	})
 
 	server := &Server{app: app, Port: port}
@@ -61,8 +74,12 @@ func New(port int, mgr *printer.Manager) *Server {
 	return server
 }
 
-func printData(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
-	logger.Debugf("Processing print job for printer: %s", printerID)
+func printData(mgr *printer.Manager, ctx fiber.Ctx, rawPrinter printer.RawPrinter) error {
+	logger.Debugf("Processing print job for printer: %v", rawPrinter)
+	if len(ctx.Body()) == 0 {
+		logger.Warnf("Received empty EPOS payload for printer: %v", rawPrinter.PrinterIp)
+		return ctx.Status(400).SendString("Empty XML payload")
+	}
 	jobData, err := escpos.ParseXML(ctx.Body())
 	if err != nil {
 		logger.Errorf("XML parsing error: %v", err)
@@ -70,7 +87,7 @@ func printData(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
 	}
 	logger.Debug("XML parsed successfully")
 
-	reply, err := mgr.WriteAsync(printerID, jobData)
+	reply, err := mgr.WriteAsync(jobData, rawPrinter)
 	if err == nil {
 		logger.Debug("Print job queued")
 		result := <-reply
@@ -86,11 +103,33 @@ func printData(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
 		} else {
 			retCode = "EX_BADPORT"
 		}
-		logger.Errorf("Print error [%s]: %v, Printer ID: %s", retCode, err, printerID)
+		logger.Errorf("Print error [%s]: %v, Printer: %v", retCode, err, rawPrinter)
 		return ctx.XML(EPOSResponse{Success: false, Code: retCode, Status: ""})
 	}
-	logger.Debugf("Print job completed successfully for printer: %s", printerID)
+	logger.Debugf("Print job completed successfully for printer: %v", rawPrinter)
 	return ctx.XML(EPOSResponse{Success: true, Code: "", Status: ""})
+}
+
+func printPDF(mgr *printer.Manager, ctx fiber.Ctx, rawPrinter printer.RawPrinter) error {
+	logger.Debugf("Processing PDF print job for printer: %v", rawPrinter)
+	pdfBytes := ctx.Body()
+	if len(pdfBytes) == 0 {
+		logger.Warnf("Received empty PDF payload for printer: %v", rawPrinter)
+		return ctx.Status(400).SendString("Empty PDF payload")
+	}
+	logger.Debugf("Received PDF data for printer: %v", rawPrinter)
+	reply, err := mgr.WriteAsync(pdfBytes, rawPrinter)
+	if err == nil {
+		logger.Debug("Print job queued")
+		result := <-reply
+		if !result.OK {
+			err = result.Err
+		}
+	}
+	if err != nil {
+		logger.Errorf("Print PDF Error for printer %v: %v", rawPrinter, err)
+	}
+	return err
 }
 
 func (s *Server) Stop() error {

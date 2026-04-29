@@ -2,10 +2,9 @@ package printer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"sync"
+	"strings"
 	"time"
 
 	"epos-proxy/logger"
@@ -13,80 +12,55 @@ import (
 	"github.com/google/gousb"
 )
 
-type PrinterType int
-
-const (
-	PrinterTypeUSB PrinterType = iota
-	PrinterTypeLAN
-)
-
-const (
-	QueueSize    = 100
-	WriteTimeout = 5 * time.Second
-)
-
-var ErrNotFound = errors.New("printer not found")
-var ErrQueueFull = errors.New("printer queue is full")
-
-type JobResult struct {
-	OK  bool
-	Err error
-}
-
-type JobFunc func(p *Printer) JobResult
-
-type job struct {
-	run   JobFunc
-	reply chan JobResult
-}
-
-type Printer struct {
-	printerType PrinterType
-	id          *PrinterID
-	lanIP       string
-	mu          sync.Mutex
-	// USB fields
-	usbCtx      *gousb.Context
-	device      *gousb.Device
-	config      *gousb.Config
-	iFace       *gousb.Interface
-	outEndpoint *gousb.OutEndpoint
-	// LAN fields
-	tcpConn net.Conn
-	jobs    chan job
-}
-
-func newPrinter(id string) *Printer {
+func newPrinter(rawPrinter RawPrinter) *Printer {
 	// Check if this is a LAN printer
-	if lanIP, ok := DecodeLANPrinterID(id); ok {
+	if lanIP, ok := DecodeLANPrinterID(rawPrinter.PrinterIp); ok {
 		p := &Printer{
-			printerType: PrinterTypeLAN,
-			lanIP:       lanIP,
-			jobs:        make(chan job, QueueSize),
+			connectionType: PrinterTypeLAN,
+			lanIP:          lanIP,
+			jobs:           make(chan Job, QueueSize),
 		}
 		go p.loop()
 		return p
 	}
 
+	var printerID *PrinterID
+	if rawPrinter.PrinterIp != "" {
+		var err error
+		printerID, err = decodePrinterID(rawPrinter.PrinterIp)
+		if err != nil {
+			logger.Warnf("failed to decode printer ID %q: %v", rawPrinter.PrinterIp, err)
+		}
+	}
+
+	var idName string
+	if printerID != nil {
+		idName = printerID.IdName
+	}
+
 	// USB printer
-	var printerID *PrinterID = nil
-	if id != "" {
-		printerID, _ = decodePrinterID(id)
-	}
-
 	p := &Printer{
-		printerType: PrinterTypeUSB,
-		id:          printerID,
-		jobs:        make(chan job, QueueSize),
+		connectionType: PrinterTypeUSB,
+		id:             printerID,
+		jobs:           make(chan Job, QueueSize),
+		idName:         idName,
+		Category:       rawPrinter.Category,
+		PrintType:      rawPrinter.PrintType,
 	}
 
-	logger.Debugf("Created new LAN printer instance for IP: %s", p.idToString())
+	if p.Category == PrinterOffice && idName == "" {
+		if err := p.fetchSystemPrinterName(); err != nil {
+			logger.Errorf("Error: %v", err)
+		}
+	}
+
+	logger.Debugf("Created new USB printer instance for ID: %s", p.idToString())
 	go p.loop()
 	return p
 }
 
 func (p *Printer) Enqueue(fn JobFunc, reply chan JobResult) error {
-	j := job{run: fn, reply: reply}
+	j := Job{run: fn, reply: reply}
 	select {
 	case p.jobs <- j:
 		logger.Debugf("Enqueued print job for printer %s", p.idToString())
@@ -102,11 +76,15 @@ func (p *Printer) Write(data []byte) error {
 		return err
 	}
 
+	if p.Category == PrinterOffice {
+		return p.printViaSystemPrinter(data)
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	logger.Debugf("Writing %d bytes to printer %s", len(data), p.idToString())
 
-	if p.printerType == PrinterTypeLAN {
+	if p.connectionType == PrinterTypeLAN {
 		if err := p.tcpConn.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
 			p.closeDeviceLocked()
 			return fmt.Errorf("failed to set write deadline for LAN printer %s: %w", p.idToString(), err)
@@ -144,11 +122,24 @@ func (p *Printer) loop() {
 		}
 	}
 }
+
+const pdfNetworkPrefix = "PDF_NETWORK_"
+
 func (p *Printer) ensureOpen() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.printerType == PrinterTypeLAN {
+	if p.Category == PrinterOffice {
+		if strings.HasPrefix(p.idName, pdfNetworkPrefix) {
+			p.lanIP = strings.TrimPrefix(p.idName, pdfNetworkPrefix)
+			if err := p.ensureOpenLANLocked(); err != nil {
+				return fmt.Errorf("printer is not open: %w", err)
+			}
+		}
+		return p.ensureSystemPrinterOpen()
+	}
+
+	if p.connectionType == PrinterTypeLAN {
 		return p.ensureOpenLANLocked()
 	}
 	return p.ensureOpenUSBLocked()
@@ -164,7 +155,7 @@ func (p *Printer) ensureOpenLANLocked() error {
 	logger.Debugf("Attempting to connect to LAN printer %s at %s", p.idToString(), addr)
 	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
 	if err != nil {
-		logger.Errorf("Failed to connect to LAN printer %s at %s: %v", p.idToString(), addr, err)
+		logger.Errorf("Failed to connect to LAN printer %v at %s: %v", p, addr, err)
 		return fmt.Errorf("failed to connect to LAN printer at %s: %w", addr, err)
 	}
 
@@ -218,8 +209,8 @@ func (p *Printer) ensureOpenUSBLocked() error {
 			match = true
 		} else if p.id.Serial != "" {
 			match = serial == p.id.Serial
-		} else if p.id.ProductID != 0 {
-			match = d.Desc.Vendor == p.id.VendorID && d.Desc.Product == p.id.ProductID
+		} else if p.id.Path != "" {
+			match = pathToString(d.Desc) == p.id.Path
 		}
 
 		if match && target == nil {
@@ -285,7 +276,7 @@ func (p *Printer) close() {
 }
 
 func (p *Printer) closeDeviceLocked() {
-	if p.printerType == PrinterTypeLAN {
+	if p.connectionType == PrinterTypeLAN {
 		if p.tcpConn != nil {
 			_ = p.tcpConn.Close()
 			p.tcpConn = nil
@@ -311,11 +302,11 @@ func (p *Printer) closeDeviceLocked() {
 }
 
 func (p *Printer) idToString() string {
-	if p.printerType == PrinterTypeLAN {
+	if p.connectionType == PrinterTypeLAN {
 		return fmt.Sprintf("LAN:%s", p.lanIP)
 	}
 	if p.id != nil {
-		return fmt.Sprintf("USB:%s", p.id.Serial)
+		return fmt.Sprintf("USB:%s, %s, %s", p.id.Serial, p.id.Path, p.idName)
 	}
 	return "USB:unknown"
 }

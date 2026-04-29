@@ -9,14 +9,26 @@
         leave-to-class="opacity-0"
     >
       <div v-if="modelValue" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/75" @click="close"/>
+        <div class="absolute inset-0 bg-black/50" @click="close"/>
         <div class="relative bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
-
+        <div class="flex gap-2 px-5 mt-3">
+          <button
+            v-for="tab in tabs"
+            :key="tab"
+            @click="switchTab(tab.key)"
+            class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            :class="tab.key === activeTab
+              ? 'bg-odoo text-white'
+              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'"
+          >
+            {{ tab.label }}
+          </button>
+          <CloseButton @click="close"/>
+        </div>
           <div class="flex items-center justify-between px-5 pt-4">
             <p class="text-[12px] text-sm uppercase tracking-widest text-odoo">
               Step {{ currentStep + 1 }} of {{ steps.length }}
             </p>
-            <CloseButton @click="close"/>
           </div>
 
           <div
@@ -34,8 +46,7 @@
             >
               <div :key="currentStep" ref="contentRef" class="px-5 pt-2 pb-2">
                 <h3 class="font-semibold text-lg text-gray-900 mb-1.5">{{ steps[currentStep].title }}</h3>
-                <p class="text-gray-500 whitespace-pre-line">{{ steps[currentStep].desc }}</p>
-
+                <p class="text-gray-500 whitespace-pre-line" v-html="formatDesc(steps[currentStep].desc)"></p>
                 <a v-if="steps[currentStep].link" :href="steps[currentStep].link" target="_blank"
                    @click.prevent="BrowserOpenURL(steps[currentStep].link)"
                    class="inline-flex items-center mt-3 px-3 py-2 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 hover:border-stone-400"
@@ -88,15 +99,40 @@
 </template>
 
 <script setup>
-import {nextTick, onUnmounted, ref, watch} from 'vue'
+import { nextTick, onUnmounted, ref, watch, computed } from 'vue'
 import {useStepModal} from './use-step-modal'
 import {BrowserOpenURL} from "../../wailsjs/runtime"
 import CloseButton from './close-button.vue'
 
 const props = defineProps({
-  modelValue: {type: Boolean, default: false},
-  steps: {type: Array, default: () => []},
-})
+    modelValue: { type: Boolean, default: false },
+    allSteps: { type: Object, default: {} },
+    filter: { type: String, default: "THERMAL" },
+});
+
+const activeTab = ref(props.filter);
+
+const tabs = [
+    { key: "THERMAL", label: "Receipt/Label" },
+    { key: "OFFICE", label: "Office" },
+];
+
+const steps = computed(() => props.allSteps[activeTab.value]);
+
+function switchTab(tab) {
+    activeTab.value = tab;
+    currentStep.value = 0;
+
+    nextTick(() => {
+        if (contentRef.value) {
+            contentHeight.value = `${contentRef.value.offsetHeight}px`;
+        }
+    });
+}
+
+const formatDesc = (text) => {
+  return !text ? "" : text.replace(/\*(.*?)\*/g, `<span class="text-odoo font-bold">$1</span>`)
+}
 
 const emit = defineEmits(['update:modelValue'])
 const {currentStep, next, back, close} = useStepModal(() => props.modelValue, emit)
