@@ -8,13 +8,15 @@ import (
 	"strings"
 )
 
-func encodePrinterID(serial string, path string) (string, error) {
+func encodePrinterID(serial string, path string, idName string) (string, error) {
 	var parts []string
 
 	if serial != "" {
 		parts = append(parts, "s:"+serial)
 	} else if path != "" {
 		parts = append(parts, "p:"+path)
+	} else if idName != "" {
+		parts = append(parts, "c:"+idName)
 	}
 
 	if len(parts) == 0 {
@@ -40,6 +42,7 @@ func decodePrinterID(id string) (*PrinterID, error) {
 	var (
 		serial string
 		path   string
+		idName string
 	)
 
 	for _, part := range strings.Split(raw, "|") {
@@ -49,15 +52,19 @@ func decodePrinterID(id string) (*PrinterID, error) {
 
 		case strings.HasPrefix(part, "p:"):
 			path = strings.TrimPrefix(part, "p:")
+
+		case strings.HasPrefix(part, "c:"):
+			idName = strings.TrimPrefix(part, "c:")
 		}
 	}
 
-	if serial == "" && path == "" {
+	if serial == "" && path == "" && idName == "" {
 		return nil, ErrInvalidPrinterID
 	}
 
 	return &PrinterID{
 		Serial: serial,
 		Path:   path,
+		IdName: idName,
 	}, nil
 }

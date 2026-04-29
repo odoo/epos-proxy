@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"epos-proxy/logger"
@@ -11,9 +12,9 @@ import (
 	"github.com/google/gousb"
 )
 
-func newPrinter(id string) *Printer {
+func newPrinter(rawPrinter RawPrinter) *Printer {
 	// Check if this is a LAN printer
-	if lanIP, ok := DecodeLANPrinterID(id); ok {
+	if lanIP, ok := DecodeLANPrinterID(rawPrinter.PrinterIp); ok {
 		p := &Printer{
 			connectionType: PrinterTypeLAN,
 			lanIP:          lanIP,
@@ -23,9 +24,18 @@ func newPrinter(id string) *Printer {
 		return p
 	}
 
-	var printerID *PrinterID = nil
-	if id != "" {
-		printerID, _ = decodePrinterID(id)
+	var printerID *PrinterID
+	if rawPrinter.PrinterIp != "" {
+		var err error
+		printerID, err = decodePrinterID(rawPrinter.PrinterIp)
+		if err != nil {
+			logger.Warnf("failed to decode printer ID %q: %v", rawPrinter.PrinterIp, err)
+		}
+	}
+
+	var idName string
+	if printerID != nil {
+		idName = printerID.IdName
 	}
 
 	// USB printer
@@ -33,6 +43,14 @@ func newPrinter(id string) *Printer {
 		connectionType: PrinterTypeUSB,
 		id:             printerID,
 		jobs:           make(chan Job, QueueSize),
+		idName:         idName,
+		Category:       rawPrinter.Category,
+	}
+
+	if p.Category == PrinterOffice && idName == "" {
+		if err := p.fetchSystemPrinterName(); err != nil {
+			logger.Errorf("Error: %v", err)
+		}
 	}
 
 	logger.Debugf("Created new USB printer instance for ID: %s", p.idToString())
@@ -55,6 +73,10 @@ func (p *Printer) Enqueue(fn JobFunc, reply chan JobResult) error {
 func (p *Printer) Write(data []byte) error {
 	if err := p.ensureOpen(); err != nil {
 		return err
+	}
+
+	if p.Category == PrinterOffice {
+		return p.printViaSystemPrinter(data)
 	}
 
 	p.mu.Lock()
@@ -99,9 +121,22 @@ func (p *Printer) loop() {
 		}
 	}
 }
+
+const pdfNetworkPrefix = "PDF_NETWORK_"
+
 func (p *Printer) ensureOpen() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.Category == PrinterOffice {
+		if strings.HasPrefix(p.idName, pdfNetworkPrefix) {
+			p.lanIP = strings.TrimPrefix(p.idName, pdfNetworkPrefix)
+			if err := p.ensureOpenLANLocked(); err != nil {
+				return fmt.Errorf("printer is not open: %w", err)
+			}
+		}
+		return p.ensureSystemPrinterOpen()
+	}
 
 	if p.connectionType == PrinterTypeLAN {
 		return p.ensureOpenLANLocked()
@@ -119,7 +154,7 @@ func (p *Printer) ensureOpenLANLocked() error {
 	logger.Debugf("Attempting to connect to LAN printer %s at %s", p.idToString(), addr)
 	conn, err := net.DialTimeout("tcp", addr, LANConnectTimeout)
 	if err != nil {
-		logger.Errorf("Failed to connect to LAN printer %s at %s: %v", p.idToString(), addr, err)
+		logger.Errorf("Failed to connect to LAN printer %v at %s: %v", p, addr, err)
 		return fmt.Errorf("failed to connect to LAN printer at %s: %w", addr, err)
 	}
 
@@ -270,7 +305,7 @@ func (p *Printer) idToString() string {
 		return fmt.Sprintf("LAN:%s", p.lanIP)
 	}
 	if p.id != nil {
-		return fmt.Sprintf("USB:%s, %s", p.id.Serial, p.id.Path)
+		return fmt.Sprintf("USB:%s, %s, %s", p.id.Serial, p.id.Path, p.idName)
 	}
 	return "USB:unknown"
 }

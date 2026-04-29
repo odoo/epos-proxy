@@ -23,6 +23,6 @@ const emit = defineEmits(['copy', 'test'])
 
 function onCopy() { emit('copy', props.printer) }
 
-function onTest() { emit('test', props.printer) }
+function onTest() { emit('test', props.printer, props.printer.type) }
 
 </script>

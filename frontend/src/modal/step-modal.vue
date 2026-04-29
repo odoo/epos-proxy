@@ -34,8 +34,7 @@
             >
               <div :key="currentStep" ref="contentRef" class="px-5 pt-2 pb-2">
                 <h3 class="font-semibold text-lg text-gray-900 mb-1.5">{{ steps[currentStep].title }}</h3>
-                <p class="text-gray-500 whitespace-pre-line">{{ steps[currentStep].desc }}</p>
-
+                <p class="text-gray-500 whitespace-pre-line" v-html="formatDesc(steps[currentStep].desc)"></p>
                 <a v-if="steps[currentStep].link" :href="steps[currentStep].link" target="_blank"
                    @click.prevent="BrowserOpenURL(steps[currentStep].link)"
                    class="inline-flex items-center mt-3 px-3 py-2 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 hover:border-stone-400"
@@ -97,6 +96,10 @@ const props = defineProps({
   modelValue: {type: Boolean, default: false},
   steps: {type: Array, default: () => []},
 })
+
+const formatDesc = (text) => {
+  return !text ? "" : text.replace(/\*(.*?)\*/g, `<span class="text-odoo font-bold">$1</span>`)
+}
 
 const emit = defineEmits(['update:modelValue'])
 const {currentStep, next, back, close} = useStepModal(() => props.modelValue, emit)

@@ -7,10 +7,9 @@ import (
 )
 
 type printerCache struct {
-	mu                sync.Mutex
-	lastSnapshot      string
-	cachedPrinters    []Info
-	cachedUnavailable []UnavailableInfo
+	mu             sync.Mutex
+	lastSnapshot   string
+	cachedPrinters []LibUsbPrinter
 }
 
 var usbCache = &printerCache{}
@@ -23,19 +22,18 @@ func (c *printerCache) HasChanged(keyMap map[string]struct{}) bool {
 	return snap != c.lastSnapshot
 }
 
-func (c *printerCache) Get() ([]Info, []UnavailableInfo) {
+func (c *printerCache) Get() []LibUsbPrinter {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.cachedPrinters, c.cachedUnavailable
+	return c.cachedPrinters
 }
 
-func (c *printerCache) Update(keyMap map[string]struct{}, printers []Info, unavailablePrinters []UnavailableInfo) {
+func (c *printerCache) Update(keyMap map[string]struct{}, printers []LibUsbPrinter) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.lastSnapshot = buildSnapshot(keyMap)
 	c.cachedPrinters = printers
-	c.cachedUnavailable = unavailablePrinters
 }
 
 func buildSnapshot(keyMap map[string]struct{}) string {

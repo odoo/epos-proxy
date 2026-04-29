@@ -1,3 +1,5 @@
+import {createPdfBytes} from "./pdf-util.js"
+
 export async function copyPrinterFieldValue(printer, field = 'ip', { copiedIds, showToast }) {
   try {
     await navigator.clipboard.writeText(printer[field]);
@@ -6,6 +8,15 @@ export async function copyPrinterFieldValue(printer, field = 'ip', { copiedIds, 
   } catch (err) {
     showToast('Copy failed:' + err)
   }
+}
+
+async function sendPdf(printerIp, printerName) {
+  const blob = await createPdfBytes("This is a test pdf printed This is a test pdf printed by printer: " + printerName);
+  return await fetch(`http://${printerIp}/print/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/pdf"},
+    body: blob,
+  })
 }
 
 async function sendEposPrint(printerIp, name) {
@@ -25,17 +36,24 @@ async function sendEposPrint(printerIp, name) {
   })
 }
 
-export async function handleTestPrint(printer, { testPrintIds, showToast }) {
+export async function handleTestPrint(printer, type, { testPrintIds, selectedPrinter, showTypeSelect, showToast }) {
+  if (type === 'ANY') {
+    selectedPrinter.value = printer
+    showTypeSelect.value = true
+    return
+  }
+
   testPrintIds.value[printer.id] = true
   try {
-    return await executePrint(printer, showToast)
+    return await executePrint(printer, showToast, type)
   } finally {
     testPrintIds.value[printer.id] = false
   }
 }
 
-async function executePrint(printer, showToast) {
+async function executePrint(printer, showToast, type) {
   try {
+    if (type === 'THERMAL') {
       const response = await sendEposPrint(printer.ip, printer.name)
       const xml = await response.text()
       const parser = new DOMParser()
@@ -51,6 +69,13 @@ async function executePrint(printer, showToast) {
       }
 
       showToast(`Test print sent`, 'success')
+    } else if (type === 'OFFICE') {
+      const response = await sendPdf(printer.ip, printer.name);
+      if (!response.ok) throw new Error('Network response was not ok')
+      showToast(`Test print sent to ${printer.name}`, 'success')
+    } else {
+      throw new Error('Unknown printer type')
+    }
   } catch (err) {
     showToast(`Test failed: ${err.message}`, 'error')
   }

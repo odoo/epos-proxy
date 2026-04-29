@@ -79,7 +79,7 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
-Section
+Section "Main Application" SEC_MAIN
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
@@ -95,6 +95,34 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+SectionEnd
+
+Section "Install SumatraPDF" SEC_SUMATRA
+
+    IfFileExists "$INSTDIR\SumatraPDF\SumatraPDF.exe" 0 +3
+        DetailPrint "SumatraPDF is already installed. Skipping installation."
+        Goto done_sumatra_install
+
+    SetOutPath "$TEMP"
+
+    StrCpy $0 "SumatraPDF-3.5.2-64-install.exe"
+    StrCpy $1 "https://www.sumatrapdfreader.org/dl/rel/3.5.2/$0"
+
+    DetailPrint "Downloading Sumatra PDF..."
+
+    nsExec::ExecToLog 'powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri \"$1\" -OutFile \"$TEMP\\$0\""'
+    Pop $2
+
+    ; Check if file exists using ORIGINAL filename ($0)
+    IfFileExists "$TEMP\$0" +2
+        MessageBox MB_ICONSTOP "Failed to download SumatraPDF"
+
+    DetailPrint "Installing Sumatra PDF..."
+    ExecWait '"$TEMP\$0" -install -silent -d "$INSTDIR\SumatraPDF"'
+
+    DetailPrint "SumatraPDF installed successfully."
+    done_sumatra_install:
+
 SectionEnd
 
 Section "uninstall"

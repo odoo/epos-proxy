@@ -94,6 +94,10 @@ inputs:
                 required: false
                 default: ''
 
+        token:
+                description: "GitHub token"
+                required: true
+
 runs:
         using: "composite"
         steps:
@@ -278,4 +282,4 @@ runs:
                           files: |
                                   */bin/*
                   env:
-                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                        GITHUB_TOKEN: ${{ inputs.token }}
