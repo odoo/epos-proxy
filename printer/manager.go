@@ -20,6 +20,7 @@ func (m *Manager) Get(rawPrinter RawPrinter) (*Printer, error) {
 	defer m.mu.Unlock()
 
 	if p, ok := m.printers[rawPrinter.PrinterIp]; ok {
+		p.PrintType = rawPrinter.PrintType
 		logger.Debugf("Reusing existing printer instance for ID: %s", rawPrinter)
 		return p, nil
 	}

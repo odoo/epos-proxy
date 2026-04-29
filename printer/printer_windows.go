@@ -42,14 +42,14 @@ func (p *Printer) printViaSystemPrinter(data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(
-		ctx,
-		sumatraPath,
-		"-print-to", p.idName,
-		"-silent",
-		tmpFile,
-	)
+	args := []string{"-print-to", p.idName, "-silent"}
 
+	if p.PrintType == DUPLEX {
+		args = append(args, "-print-settings", "duplex,long-edge")
+	}
+	args = append(args, tmpFile)
+
+	cmd := exec.CommandContext(ctx, sumatraPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	if err := cmd.Run(); err != nil {

@@ -45,6 +45,7 @@ func newPrinter(rawPrinter RawPrinter) *Printer {
 		jobs:           make(chan Job, QueueSize),
 		idName:         idName,
 		Category:       rawPrinter.Category,
+		PrintType:      rawPrinter.PrintType,
 	}
 
 	if p.Category == PrinterOffice && idName == "" {

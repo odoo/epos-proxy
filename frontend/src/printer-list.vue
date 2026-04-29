@@ -77,7 +77,7 @@
   </div>
 
   <NetworkIpDialog :show="showAddDialog" @close="onNetworkDialogClose" :showToast="showToast"/>
-
+  <PrinterOptionDialog v-model="showPrinterOptionSelect" @select="selectOption"/>
   <teleport to="body">
     <transition
         enter-active-class="transition duration-300 ease-out"
@@ -107,6 +107,7 @@ import { copyPrinterFieldValue, handleTestPrint } from "./components/printer-act
 import PrinterFilter from './components/top-bar.vue'
 import PrinterTypeModal from "./modal/printer-type-modal.vue";
 import DocsButton from "./modal/docs-button.vue";
+import PrinterOptionDialog from "./modal/printer-option-dialog.vue";
 
 const printers = ref([])
 const errorMsg = ref(null)
@@ -120,17 +121,33 @@ const showAddDialog = ref(false)
 const toast = ref({ show: false, message: '', type: 'success' })
 const activeFilter = ref('THERMAL')
 const showTypeSelect = ref(false)
+const showPrinterOptionSelect = ref(false)
 const selectedPrinter = ref(null)
+const selectedDuplex = ref(null)
 
 let toastTimeout = null
 let intervalId = null
 let isUpdating = false
 
 const copyField = (printer, field) => copyPrinterFieldValue(printer, field, { copiedIds, showToast })
-const testPrint = (printer, type) => handleTestPrint(printer, type, { testPrintIds, selectedPrinter, showTypeSelect, showToast })
-
+const testPrint = (printer, type) => {
+  if (type === "OFFICE" && !selectedDuplex.value) {
+    selectedPrinter.value = printer
+    showPrinterOptionSelect.value = true
+    return
+  }
+  handleTestPrint(printer, type, { duplex: selectedDuplex.value }, { testPrintIds, selectedPrinter, showTypeSelect, showToast })
+}
 const handleFocus = () => startPolling();
 const handleBlur = () => stopPolling();
+
+const selectOption = (mode) => {
+  selectedDuplex.value = mode
+  testPrint(selectedPrinter.value, "OFFICE")
+
+  selectedPrinter.value = null
+  selectedDuplex.value = null 
+}
 
 function selectType(type) {
   showTypeSelect.value = false

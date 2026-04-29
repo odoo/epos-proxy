@@ -49,8 +49,15 @@ func New(port int, mgr *printer.Manager) *Server {
 
 	app.Post("/p/:printerId/print/pdf", func(ctx fiber.Ctx) error {
 		printerId := ctx.Params("printerId")
-		logger.Debugf("Print request received for printer: %s", printerId)
-		return printPDF(mgr, ctx, printer.RawPrinter{Category: printer.PrinterOffice, PrinterIp: printerId})
+		rawPrinter := printer.RawPrinter{Category: printer.PrinterOffice, PrinterIp: printerId}
+		logger.Debugf("Print request received for printer: %v", rawPrinter)
+
+		if duplex := ctx.Query("duplex"); duplex == "true" {
+			rawPrinter.PrintType = printer.DUPLEX
+		} else {
+			rawPrinter.PrintType = printer.SINGLE
+		}
+		return printPDF(mgr, ctx, rawPrinter)
 	})
 
 	server := &Server{app: app, Port: port}
