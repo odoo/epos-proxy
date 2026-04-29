@@ -61,9 +61,20 @@ cat > "${ENTITLEMENTS}" << EOF
 </plist>
 EOF
 
+# ── Version info ──────────────────────────────────────────────────────────────
+echo "▶ Preparing version info..."
+
+VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
+
+echo "Version: $VERSION"
+echo "Build Time: $BUILD_TIME"
+echo "Commit: $COMMIT"
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "▶ Building..."
-wails build -clean
+wails build -clean -ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.Commit=${COMMIT}"
 
 # ── Bundle libusb ─────────────────────────────────────────────────────────────
 echo "▶ Bundling libusb..."
