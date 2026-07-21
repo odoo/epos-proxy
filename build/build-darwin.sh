@@ -61,6 +61,10 @@ cat > "${ENTITLEMENTS}" << EOF
 </plist>
 EOF
 
+# ── Prepare tinygo-bluetooth ──────────────────────────────────────────────────
+echo "▶ Setting up tinygo-bluetooth..."
+"$(dirname "$0")/../scripts/setup-tinygo-bluetooth.sh"
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "▶ Building..."
 wails build -clean

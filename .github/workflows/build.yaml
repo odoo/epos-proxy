@@ -43,6 +43,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup TinyGo Bluetooth
+        shell: bash
+        run: |
+          chmod +x ./scripts/setup-tinygo-bluetooth.sh
+          ./scripts/setup-tinygo-bluetooth.sh
+
       - name: Build wails
         uses: ./.github/actions
         id: build

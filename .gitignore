@@ -9,3 +9,6 @@ frontend/dist
 /frontend/wailsjs/
 .vscode/
 package.json.md5
+
+# Cloned from upstream by scripts/setup-tinygo-bluetooth.sh — not tracked in git
+tinygo-bluetooth/

@@ -41,12 +41,15 @@
 import {ref, watch, nextTick} from 'vue'
 import CloseButton from './close-button.vue'
 import {AddLANPrinter} from '../../wailsjs/go/main/App'
+import { useToast } from '../hooks/useToast.js'
 
 const props = defineProps({
   show: {type: Boolean, default: false},
 })
 
-const emit = defineEmits(['close', 'notify'])
+const emit = defineEmits(['close'])
+
+const { notify } = useToast()
 
 const ipInput = ref('')
 const error = ref(null)
@@ -78,11 +81,11 @@ async function submit() {
 
   try {
     await AddLANPrinter(ip)
-    emit('notify', 'Printer added successfully', 'success')
+    notify('Printer added successfully', 'success')
     close(true)
   } catch (err) {
     console.log(err)
-    emit('notify', err || 'Failed to add printer', 'danger')
+    notify(err || 'Failed to add printer', 'danger')
     error.value = err || 'Failed to add printer'
   } finally {
     loading.value = false

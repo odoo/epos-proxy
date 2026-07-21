@@ -1,0 +1,16 @@
+--- a/gattc_darwin.go
++++ b/gattc_darwin.go
+@@ -219,6 +219,13 @@ func (c DeviceCharacteristic) UUID() UUID {
+ 	return c.uuidWrapper
+ }
+ 
++// Properties returns the CBCharacteristicProperties bitmask for this characteristic.
++// Use cbgo.CharacteristicPropertyWrite and cbgo.CharacteristicPropertyWriteWithoutResponse
++// to test for write capability.
++func (c DeviceCharacteristic) Properties() cbgo.CharacteristicProperties {
++	return c.characteristic.Properties()
++}
++
+ // Write replaces the characteristic value with a new value. The
+ // call will return after all data has been written.
+ func (c DeviceCharacteristic) Write(p []byte) (n int, err error) {
