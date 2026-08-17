@@ -1,0 +1,22 @@
+name: "obox-app"
+arch: "amd64"
+platform: "linux"
+version: "${NFPM_VERSION}"
+section: "utils"
+priority: "optional"
+maintainer: "Odoo <contact@odoo.com>"
+description: "Obox app"
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+  - libusb-1.0-0
+
+contents:
+  - src: "${NFPM_BINARY_PATH}"
+    dst: /usr/bin/obox-app
+    file_info:
+      mode: 0755
+  - src: ./build/appicon.png
+    dst: /usr/share/icons/hicolor/512x512/apps/obox-app.png
+  - src: ./build/linux/obox-app.desktop
+    dst: /usr/share/applications/obox-app.desktop

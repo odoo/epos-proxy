@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Obox app
+Comment=Obox app
+Exec=obox-app
+Icon=obox-app
+Terminal=false
+Type=Application
+Categories=Utility;
