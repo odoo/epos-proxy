@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"epos-proxy/internal/printer"
-	"epos-proxy/internal/testutil"
+	"obox-app/internal/printer"
+	"obox-app/internal/testutil"
 )
 
 func TestServer_Lifecycle(t *testing.T) {

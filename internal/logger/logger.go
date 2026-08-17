@@ -22,7 +22,7 @@ func InitLogger() {
 		Fatalf("Failed to create log directory: %v", err)
 	}
 
-	filename := filepath.Join(logDir, "epos-proxy.log")
+	filename := filepath.Join(logDir, "obox-app.log")
 
 	log.SetOutput(&lumberjack.Logger{
 		Filename:   filename,

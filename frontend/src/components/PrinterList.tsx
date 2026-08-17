@@ -11,26 +11,28 @@ export default function PrinterList() {
   return (
     <>
       <div className="w-full max-w-full sm:max-w-md md:max-w-lg lg:max-w-xl bg-white/85 rounded-2xl shadow-lg overflow-hidden px-4 sm:px-6 py-2 sm:py-4">
-        {printers && (
-          <div className="p-6">
-            <ul className="divide-y divide-gray-300">
-              {printers.printers.map((printer) => (
-                <PrinterListItem
-                  key={printer.id}
-                  printer={printer}
-                  isOnline={true}
-                />
-              ))}
-              {printers.unavailablePrinters.map((printer) => (
-                <PrinterListItem
-                  key={printer.name}
-                  printer={printer}
-                  isOnline={false}
-                />
-              ))}
-            </ul>
-          </div>
-        )}
+        {printers &&
+          (printers.printers.length > 0 ||
+            printers.unavailablePrinters.length > 0) && (
+            <div className="p-6">
+              <ul className="divide-y divide-gray-300">
+                {printers.printers.map((printer) => (
+                  <PrinterListItem
+                    key={printer.id}
+                    printer={printer}
+                    isOnline={true}
+                  />
+                ))}
+                {printers.unavailablePrinters.map((printer) => (
+                  <PrinterListItem
+                    key={printer.name}
+                    printer={printer}
+                    isOnline={false}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
 
         {!printers ? (
           !fetchError && (
@@ -45,7 +47,7 @@ export default function PrinterList() {
           printers.unavailablePrinters.length === 0 && (
             <div className="p-6">
               <div className="font-medium text-lg text-center">
-                No printers found
+                No printer found
               </div>
               <div className="mt-2 text-gray-600 text-center">
                 Make sure your printer is powered on and connected via USB.

@@ -1,7 +1,7 @@
 package printer
 
 import (
-	"epos-proxy/internal/testutil"
+	"obox-app/internal/testutil"
 	"github.com/google/gousb"
 	"testing"
 )
