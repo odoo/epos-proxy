@@ -1,7 +1,7 @@
 package main
 
 import (
-	"epos-proxy/internal/logger"
+	"obox-app/internal/logger"
 
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -47,7 +47,7 @@ func handleAutoStartToggle(app *App, cb *menu.CallbackData) {
 func (app *App) ConfirmQuit() bool {
 	result, err := app.dlg().Message(app.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
-		Title:         "Quit ePOS Proxy",
+		Title:         "Quit Obox app",
 		Message:       "Stopping the proxy will prevent POS from printing receipts.\n\nAre you sure you want to quit?",
 		Buttons:       []string{"Cancel", "Quit"},
 		DefaultButton: "Cancel",
