@@ -1,30 +1,24 @@
 import { useContext, useState } from "react";
 import { ToastContext } from "../contexts/ToastContext";
-import { main } from "../../wailsjs/go/models";
+import { printer } from "../../wailsjs/go/models";
 import { errorText } from "../error";
 import { executePrint } from "../functions/executePrint";
+import { useClipboard } from "../hooks/useClipboard";
 
 interface PrinterActionsProps {
-  printer: main.Printer;
+  printer: printer.Device;
 }
 
 export default function PrinterActions({ printer }: PrinterActionsProps) {
   const toastContext = useContext(ToastContext);
-  const [copiedIp, setCopiedIp] = useState(false);
+  const { copy, isCopied } = useClipboard();
   const [isTestPrinting, setIsTestPrinting] = useState(false);
   const [isCashDrawerOpening, setIsCashDrawerOpening] = useState(false);
 
-  async function onCopy() {
-    try {
-      await navigator.clipboard.writeText(printer.ip);
-      setCopiedIp(true);
-      setTimeout(() => setCopiedIp(false), 2000);
-    } catch (err) {
-      toastContext.actions.showToast(
-        `Copy failed: ${errorText(err, "unknown error")}`,
-        "danger",
-      );
-    }
+  const copiedIp = isCopied(printer.ip);
+
+  function onCopy() {
+    copy(printer.ip, "Printer IP", printer.ip);
   }
 
   async function onTest() {

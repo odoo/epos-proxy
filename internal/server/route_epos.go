@@ -3,15 +3,12 @@ package server
 import (
 	"encoding/xml"
 	"errors"
-	"fmt"
-	"sync/atomic"
 
 	"epos-proxy/internal/escpos"
 	"epos-proxy/internal/logger"
 	"epos-proxy/internal/printer"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
 )
 
 type EPOSResponse struct {
@@ -21,53 +18,26 @@ type EPOSResponse struct {
 	Status  string   `xml:"status,attr"`
 }
 
-type Server struct {
-	app     *fiber.App
-	Port    int
-	running atomic.Bool
-}
-
-func New(port int, mgr *printer.Manager) *Server {
-	app := fiber.New(fiber.Config{
-		AppName: "ePOS proxy",
-	})
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:        []string{"*"},
-		AllowPrivateNetwork: true,
-	}))
-
-	app.Post("/p/:printerId/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
+func registerEPOSRoutes(s *Server) {
+	s.app.Post("/p/:printerId/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
 		printerId := ctx.Params("printerId")
 		logger.Debugf("Print request received for printer: %s", printerId)
-		return printData(mgr, ctx, printerId)
+		return printReceipt(s.mgr, ctx, printerId)
 	})
 
-	app.Post("/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
+	s.app.Post("/cgi-bin/epos/service.cgi", func(ctx fiber.Ctx) error {
 		logger.Debugf("Print request received (auto printer selection)")
-		return printData(mgr, ctx, "")
+		return printReceipt(s.mgr, ctx, "")
 	})
 
-	app.Post("/p/:printerId/pstprnt", func(ctx fiber.Ctx) error {
+	s.app.Post("/p/:printerId/pstprnt", func(ctx fiber.Ctx) error {
 		printerId := ctx.Params("printerId")
 		logger.Debugf("Label print request received for printer: %s", printerId)
-		return printLabel(mgr, ctx, printerId)
+		return printLabel(s.mgr, ctx, printerId)
 	})
-
-	server := &Server{app: app, Port: port}
-	server.running.Store(true)
-	go func() {
-		logger.Infof("HTTP server listening on 0.0.0.0:%d", port)
-		err := app.Listen(fmt.Sprintf("0.0.0.0:%d", port))
-		if err != nil {
-			logger.Error("EPOS Server Error: ", err)
-		}
-		server.running.Store(false)
-		logger.Warn("HTTP server stopped")
-	}()
-	return server
 }
 
-func printData(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
+func printReceipt(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
 	logger.Debugf("Processing print job for printer: %s", printerID)
 	jobData, err := escpos.ParseXML(ctx.Body())
 	if err != nil {
@@ -130,14 +100,4 @@ func printLabel(mgr *printer.Manager, ctx fiber.Ctx, printerID string) error {
 
 	logger.Debugf("Print job completed successfully for printer: %s", printerID)
 	return ctx.SendStatus(fiber.StatusOK)
-}
-
-func (s *Server) Stop() error {
-	logger.Infof("Stopping HTTP server")
-	s.running.Store(false)
-	return s.app.Shutdown()
-}
-
-func (s *Server) Running() bool {
-	return s.running.Load()
 }

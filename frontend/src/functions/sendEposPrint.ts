@@ -1,7 +1,7 @@
-import { main } from "../../wailsjs/go/models";
+import { printer } from "../../wailsjs/go/models";
 
 export async function sendEposPrint(
-  printer: main.Printer,
+  printer: printer.Device,
   openCashDrawer = false,
 ) {
   const content = openCashDrawer

@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 import type { Step } from "../types";
 import { useStepDialog } from "../hooks/useStepDialog";
+import { useClipboard } from "../hooks/useClipboard";
 import Dialog from "./Dialog";
 import { brewSteps, linuxSteps, zadigSteps } from "../assets/data/fixStep";
 import { AppContext } from "../contexts/AppContext";
@@ -21,7 +22,7 @@ export default function StepDialog({ printerName }: { printerName: string }) {
   const [displayStep, setDisplayStep] = useState(0);
   const [phase, setPhase] = useState<ContentPhase>("shown");
   const [contentHeight, setContentHeight] = useState("auto");
-  const [codeCopied, setCodeCopied] = useState<Record<number, boolean>>({});
+  const { copy, isCopied } = useClipboard();
 
   useEffect(() => {
     if (currentStep === displayStep) {
@@ -68,15 +69,6 @@ export default function StepDialog({ printerName }: { printerName: string }) {
       cancelAnimationFrame(inner);
     };
   }, [phase]);
-
-  async function copyCode(index: number, code: string) {
-    await navigator.clipboard.writeText(code);
-    setCodeCopied((copied) => ({ ...copied, [index]: true }));
-    setTimeout(
-      () => setCodeCopied((copied) => ({ ...copied, [index]: false })),
-      2000,
-    );
-  }
 
   const fixSteps = useMemo<Step[]>(() => {
     if (appContext.data.isWindows) {
@@ -158,9 +150,9 @@ export default function StepDialog({ printerName }: { printerName: string }) {
               </pre>
               <button
                 className="absolute top-2.5 right-2 px-2 py-1 text-xs rounded-md bg-slate-700 text-slate-300 hover:bg-slate-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                onClick={() => copyCode(index, code)}
+                onClick={() => copy(code, "Command", `code-${index}`)}
               >
-                {codeCopied[index] ? "✓ Copied" : "Copy"}
+                {isCopied(`code-${index}`) ? "✓ Copied" : "Copy"}
               </button>
             </div>
           ))}

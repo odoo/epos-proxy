@@ -9,6 +9,7 @@ import (
 
 	"epos-proxy/internal/config"
 	"epos-proxy/internal/logger"
+	"epos-proxy/internal/obox"
 	"epos-proxy/internal/printer"
 	"epos-proxy/internal/server"
 	"epos-proxy/internal/util"
@@ -36,14 +37,30 @@ func (runtimeDialogs) SaveFile(ctx context.Context, opts wailsruntime.SaveDialog
 	return wailsruntime.SaveFileDialog(ctx, opts)
 }
 
+// emitter abstracts Wails runtime event emissions. Production code uses
+// runtimeEvents; tests substitute a fake so event-driven code paths can
+// be exercised without a live Wails context.
+type emitter interface {
+	Emit(ctx context.Context, eventName string, optionalData ...interface{})
+}
+
+// runtimeEvents forwards to the real Wails runtime.
+type runtimeEvents struct{}
+
+func (runtimeEvents) Emit(ctx context.Context, eventName string, optionalData ...interface{}) {
+	wailsruntime.EventsEmit(ctx, eventName, optionalData...)
+}
+
 // App struct
 type App struct {
 	ctx            context.Context
 	webserver      *server.Server
 	config         *config.Manager
 	printerManager *printer.Manager
+	obox           *obox.Module
 	autoStart      *autostart.App
 	dialogs        dialoger
+	events         emitter
 }
 
 // dlg returns the dialog backend, defaulting to the Wails runtime so an App
@@ -53,6 +70,15 @@ func (a *App) dlg() dialoger {
 		return runtimeDialogs{}
 	}
 	return a.dialogs
+}
+
+// ev returns the event emitter backend, defaulting to the Wails runtime so an App
+// built as a bare struct literal still behaves correctly.
+func (a *App) ev() emitter {
+	if a.events == nil {
+		return runtimeEvents{}
+	}
+	return a.events
 }
 
 // showError surfaces an error to the user and logs any failure to do so.
@@ -66,33 +92,17 @@ func (a *App) showError(title, message string) {
 	}
 }
 
-type Printer struct {
-	Name   string `json:"name"`
-	Ip     string `json:"ip"`
-	Id     string `json:"id"`
-	IsLAN  bool   `json:"isLAN"`
-	LANIp  string `json:"lanIp,omitempty"`
-	Online bool   `json:"online"`
-	Type   string `json:"type"`
-}
-
-type UnavailablePrinter struct {
-	Name     string `json:"name"`
-	ErrorMsg string `json:"errorMsg"`
-	IsLAN    bool   `json:"isLAN"`
-	LANIp    string `json:"lanIp,omitempty"`
-}
-
 type AppVariable struct {
 	ServerRunning bool   `json:"serverRunning"`
-	DefaultIp     string `json:"defaultIp"`
 	Os            string `json:"os"`
 }
 
-type Printers struct {
-	ErrorMsg            string               `json:"errorMsg"`
-	Printers            []Printer            `json:"printers"`
-	UnavailablePrinters []UnavailablePrinter `json:"unavailablePrinters"`
+type OdooStatusInterface struct {
+	AppId           string `json:"appId"`
+	IpAddress       string `json:"ipAddress"`
+	DbURL           string `json:"dbUrl"`
+	WebsocketStatus string `json:"websocketStatus"`
+	LanStatus       string `json:"lanStatus"`
 }
 
 func NewApp() *App {
@@ -105,6 +115,7 @@ func NewApp() *App {
 	}
 	a.printerManager = printer.NewManager()
 	a.dialogs = runtimeDialogs{}
+	a.events = runtimeEvents{}
 
 	return a
 }
@@ -131,7 +142,13 @@ func (a *App) startup(ctx context.Context) {
 		logger.Warn("Unable to resolve port, using default")
 	}
 
-	a.webserver = server.New(port, a.printerManager)
+	a.obox = obox.NewModule(a.config, port)
+	a.webserver = server.New(port, a.printerManager, a.obox)
+
+	a.obox.OnStatusChange(func() {
+		status := a.CheckOdooStatus()
+		a.ev().Emit(a.ctx, "odoo:status_changed", status)
+	})
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -146,7 +163,6 @@ func (a *App) AppVariable() AppVariable {
 	return AppVariable{
 		Os:            runtime.GOOS,
 		ServerRunning: a.webserver.Running(),
-		DefaultIp:     fmt.Sprintf("127.0.0.1:%d", a.webserver.Port),
 	}
 }
 
@@ -156,61 +172,13 @@ func (a *App) GetPrinterIp(id string) string {
 	return ip
 }
 
-func (a *App) Printers() Printers {
-
+func (a *App) Printers() printer.DiscoveryResult {
 	logger.Debug("Collecting printer status")
-
-	printers := make([]Printer, 0)
-	unavailablePrinters := make([]UnavailablePrinter, 0)
-
-	printerInfos, err := printer.ListUSBPrinters()
-	errorMsg := ""
-
-	if err == nil {
-
-		logger.Debugf("Detected %d available USB printers", len(printerInfos.Available))
-
-		for _, info := range printerInfos.Available {
-			printers = append(printers, Printer{
-				Id:     info.Id,
-				Name:   info.Name,
-				Ip:     a.GetPrinterIp(info.Id),
-				Online: true,
-				Type:   string(info.Type),
-			})
-		}
-
-		for _, info := range printerInfos.Unavailable {
-			unavailablePrinters = append(unavailablePrinters, UnavailablePrinter{
-				Name:     info.Name,
-				ErrorMsg: info.Error,
-			})
-
-			logger.Warnf("USB printer unavailable: %s (%s)", info.Name, info.Error)
-		}
-	} else {
-		errorMsg = err.Error()
-		logger.Errorf("USB printer detection failed: %v", err)
+	result := printer.DiscoverAllPrinters(a.config)
+	for i := range result.Printers {
+		result.Printers[i].Ip = a.GetPrinterIp(result.Printers[i].Identifier)
 	}
-
-	lanPrinters := printer.ListLANPrinters(a.config)
-
-	for _, info := range lanPrinters {
-		printers = append(printers, Printer{
-			Id:    info.Id,
-			Name:  fmt.Sprintf("Network - %s", info.IP),
-			Ip:    a.GetPrinterIp(info.Id),
-			IsLAN: true,
-			LANIp: info.IP,
-			Type:  string(printer.TypeReceipt),
-		})
-	}
-
-	return Printers{
-		Printers:            printers,
-		UnavailablePrinters: unavailablePrinters,
-		ErrorMsg:            errorMsg,
-	}
+	return result
 }
 
 func (a *App) AddLANPrinter(ip string) error {
@@ -327,4 +295,48 @@ func (a *App) DisableAutostart() error {
 	}
 
 	return nil
+}
+
+func (a *App) CheckOdooStatus() OdooStatusInterface {
+	logger.Debugf("checking Odoo status")
+
+	dbURL := ""
+	wsStatus := "disconnected"
+	lanStatus := "disconnected"
+	if a.obox != nil {
+		dbURL = a.obox.GetDbURL()
+		wsStatus = a.obox.GetWebsocketStatus()
+		lanStatus = a.obox.GetLANStatus()
+	}
+
+	return OdooStatusInterface{
+		AppId:           a.config.GetAppID(),
+		IpAddress:       util.LocalAddr(a.webserver.Port),
+		DbURL:           dbURL,
+		WebsocketStatus: wsStatus,
+		LanStatus:       lanStatus,
+	}
+}
+
+func (a *App) ConfirmDisconnectOdoo() (bool, error) {
+	logger.Debugf("Confirm Disconnect Odoo requested")
+
+	result, err := a.dlg().Message(a.ctx, wailsruntime.MessageDialogOptions{
+		Type:          wailsruntime.QuestionDialog,
+		Title:         "Disconnect Odoo",
+		Message:       "Are you sure you want to disconnect and remove the Odoo database connection?",
+		Buttons:       []string{"Cancel", "Disconnect"},
+		DefaultButton: "Cancel",
+		CancelButton:  "Cancel",
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to show confirmation dialog: %w", err)
+	}
+
+	if result != "Disconnect" && result != "Confirm" && result != "Yes" {
+		return false, nil
+	}
+
+	a.obox.Disconnect()
+	return true, nil
 }
