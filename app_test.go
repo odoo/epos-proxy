@@ -13,6 +13,7 @@ import (
 	"epos-proxy/internal/printer"
 	"epos-proxy/internal/server"
 	"epos-proxy/internal/testutil"
+	"epos-proxy/internal/util"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -46,7 +47,7 @@ func TestNewApp(t *testing.T) {
 	testutil.ExpectedNotNil(t, app.printerManager)
 }
 
-func TestApp_AppVariableAndPrintersAndGetPrinterIp(t *testing.T) {
+func TestApp_AppVariableAndPrintersAndGetPrinterUrl(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
@@ -68,9 +69,8 @@ func TestApp_AppVariableAndPrintersAndGetPrinterIp(t *testing.T) {
 	}
 
 	appVariable := app.AppVariable()
-	testutil.ExpectedEqual(t, app.GetPrinterIp("czpTTjEyMzQ1Ng"), fmt.Sprintf("127.0.0.1:%d/p/czpTTjEyMzQ1Ng", port))
+	testutil.ExpectedEqual(t, app.GetPrinterUrl("czpTTjEyMzQ1Ng"), fmt.Sprintf("%s:%d/p/czpTTjEyMzQ1Ng", util.GetLocalIP(app.IsNetworkPrintingEnabled()), port))
 	testutil.ExpectedTrue(t, appVariable.ServerRunning, "Expected ServerRunning to be true")
-	testutil.ExpectedEqual(t, appVariable.DefaultIp, fmt.Sprintf("127.0.0.1:%d", port))
 	testutil.ExpectedTrue(t, appVariable.Os != "", "Expected non-empty Os field in app variable")
 
 	// Verify Printers() includes the configured LAN printer
@@ -81,7 +81,7 @@ func TestApp_AppVariableAndPrintersAndGetPrinterIp(t *testing.T) {
 			foundLAN = true
 			testutil.ExpectedEqual(t, p.Type, string(printer.TypeReceipt))
 			testutil.ExpectedEqual(t, p.Name, "Network - 192.168.1.100")
-			testutil.ExpectedEqual(t, p.Ip, fmt.Sprintf("127.0.0.1:%d/p/%s", port, p.Id))
+			testutil.ExpectedEqual(t, p.Ip, fmt.Sprintf("%s:%d/p/%s", util.GetLocalIP(app.IsNetworkPrintingEnabled()), port, p.Id))
 		}
 	}
 	testutil.ExpectedTrue(t, foundLAN, "Expected to find configured LAN printer in printer status")
@@ -286,4 +286,44 @@ func TestApp_AutostartMethods(t *testing.T) {
 
 	// Disable autostart
 	_ = app.DisableAutostart()
+}
+
+func TestApp_NetworkPrintingEnabled(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	cfg, err := config.NewManager()
+	testutil.ExpectedNoError(t, err)
+
+	port := testutil.GetFreePort(t)
+	mgr := printer.NewManager()
+	srv := server.New(port, mgr)
+	defer srv.Stop()
+
+	app := &App{config: cfg, webserver: srv}
+
+	// 1. Initial state (false)
+	testutil.ExpectedFalse(t, app.IsNetworkPrintingEnabled())
+
+	// 2. Enable network printing
+	err = app.SetNetworkPrintingEnabled(true)
+	testutil.ExpectedNoError(t, err)
+	testutil.ExpectedTrue(t, app.IsNetworkPrintingEnabled())
+}
+
+func TestApp_GetTroubleshootInfo(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	cfg, err := config.NewManager()
+	testutil.ExpectedNoError(t, err)
+	_, err = cfg.ResolvePort()
+	testutil.ExpectedNoError(t, err)
+
+	app := &App{config: cfg}
+
+	info := app.GetTroubleshootInfo()
+	testutil.ExpectedTrue(t, info.Port > 0)
+	testutil.ExpectedNotEqual(t, info.Subnet, "")
+	testutil.ExpectedNotEqual(t, info.LocalIP, "")
 }

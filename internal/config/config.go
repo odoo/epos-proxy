@@ -21,13 +21,15 @@ const (
 )
 
 type AppConfig struct {
-	Port        int      `json:"port"`
-	LANPrinters []string `json:"lan_printers,omitempty"`
+	Port            int      `json:"port"`
+	LANPrinters     []string `json:"lan_printers,omitempty"`
+	NetworkPrinting bool     `json:"network_printing"`
 }
 
 func defaults() AppConfig {
 	return AppConfig{
-		Port: 0,
+		Port:            0,
+		NetworkPrinting: false,
 	}
 }
 
@@ -128,6 +130,25 @@ func (cm *Manager) ResolvePort() (int, error) {
 		log.Printf("[config] warning: could not save: %v\n", err)
 	}
 	return port, nil
+}
+
+func (cm *Manager) GetPort() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.Data.Port
+}
+
+func (cm *Manager) SetNetworkPrintingEnabled(enabled bool) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.Data.NetworkPrinting = enabled
+	return cm.saveLocked()
+}
+
+func (cm *Manager) IsNetworkPrintingEnabled() bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.Data.NetworkPrinting
 }
 
 func (cm *Manager) AddLanEposPrinter(ip string) error {

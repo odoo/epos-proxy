@@ -79,7 +79,7 @@ export default function PrinterActions({ printer }: PrinterActionsProps) {
       <button
         onClick={onTest}
         disabled={isTestPrinting}
-        className="flex-1 border rounded-lg text-sm px-3 py-2 cursor-pointer border-stone-300 text-stone-600 hover:bg-stone-50 hover:border-stone-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 border rounded-lg text-sm px-3 py-2 cursor-pointer border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isTestPrinting ? "Printing..." : "Test"}
       </button>
@@ -88,7 +88,7 @@ export default function PrinterActions({ printer }: PrinterActionsProps) {
         <button
           onClick={onCashDrawerOpen}
           disabled={isCashDrawerOpening}
-          className="flex-1 break-keep border rounded-lg text-sm px-3 py-2 cursor-pointer border-stone-300 text-stone-600 hover:bg-stone-50 hover:border-stone-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 break-keep border rounded-lg text-sm px-3 py-2 cursor-pointer border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isCashDrawerOpening ? "Opening..." : "Cash Drawer"}
         </button>

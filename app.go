@@ -85,7 +85,6 @@ type UnavailablePrinter struct {
 
 type AppVariable struct {
 	ServerRunning bool   `json:"serverRunning"`
-	DefaultIp     string `json:"defaultIp"`
 	Os            string `json:"os"`
 }
 
@@ -106,13 +105,6 @@ func NewApp() *App {
 	a.printerManager = printer.NewManager()
 	a.dialogs = runtimeDialogs{}
 
-	return a
-}
-
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	logger.Debugf("Application startup")
-
 	cfg, err := config.NewManager()
 	if err != nil {
 		logger.Fatalf("Config initialization failed: %v", err)
@@ -122,11 +114,17 @@ func (a *App) startup(ctx context.Context) {
 		logger.Warnf("Config load warning: %v", err)
 	}
 
-	logger.Debugf("Config loaded from %s", cfg.Path())
-
 	a.config = cfg
 
-	port, err := cfg.ResolvePort()
+	return a
+}
+
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	logger.Debugf("Application startup")
+	logger.Debugf("Config loaded from %s", a.config.Path())
+
+	port, err := a.config.ResolvePort()
 	if err != nil {
 		logger.Warn("Unable to resolve port, using default")
 	}
@@ -146,14 +144,13 @@ func (a *App) AppVariable() AppVariable {
 	return AppVariable{
 		Os:            runtime.GOOS,
 		ServerRunning: a.webserver.Running(),
-		DefaultIp:     fmt.Sprintf("127.0.0.1:%d", a.webserver.Port),
 	}
 }
 
-func (a *App) GetPrinterIp(id string) string {
-	ip := fmt.Sprintf("127.0.0.1:%d/p/%s", a.webserver.Port, id)
-	logger.Debugf("Generated printer endpoint: %s", ip)
-	return ip
+func (a *App) GetPrinterUrl(id string) string {
+	url := fmt.Sprintf("%s:%d/p/%s", util.GetLocalIP(a.config.IsNetworkPrintingEnabled()), a.webserver.Port, id)
+	logger.Debugf("Generated printer endpoint: %s", url)
+	return url
 }
 
 func (a *App) Printers() Printers {
@@ -165,7 +162,6 @@ func (a *App) Printers() Printers {
 
 	printerInfos, err := printer.ListUSBPrinters()
 	errorMsg := ""
-
 	if err == nil {
 
 		logger.Debugf("Detected %d available USB printers", len(printerInfos.Available))
@@ -174,7 +170,7 @@ func (a *App) Printers() Printers {
 			printers = append(printers, Printer{
 				Id:     info.Id,
 				Name:   info.Name,
-				Ip:     a.GetPrinterIp(info.Id),
+				Ip:     a.GetPrinterUrl(info.Id),
 				Online: true,
 				Type:   string(info.Type),
 			})
@@ -199,7 +195,7 @@ func (a *App) Printers() Printers {
 		printers = append(printers, Printer{
 			Id:    info.Id,
 			Name:  fmt.Sprintf("Network - %s", info.IP),
-			Ip:    a.GetPrinterIp(info.Id),
+			Ip:    a.GetPrinterUrl(info.Id),
 			IsLAN: true,
 			LANIp: info.IP,
 			Type:  string(printer.TypeReceipt),
@@ -214,7 +210,6 @@ func (a *App) Printers() Printers {
 }
 
 func (a *App) AddLANPrinter(ip string) error {
-
 	logger.Debugf("Adding LAN printer: %s", ip)
 
 	ip, err := printer.ValidateIPAddress(ip)
@@ -231,12 +226,10 @@ func (a *App) AddLANPrinter(ip string) error {
 	}
 
 	logger.Debugf("LAN printer added successfully: %s", ip)
-
 	return nil
 }
 
 func (a *App) ConfirmRemoveLANPrinter(ip string) (bool, error) {
-
 	logger.Debugf("Remove LAN printer requested: %s", ip)
 
 	result, err := a.dlg().Message(a.ctx, wailsruntime.MessageDialogOptions{
@@ -327,4 +320,38 @@ func (a *App) DisableAutostart() error {
 	}
 
 	return nil
+}
+
+func (a *App) SetNetworkPrintingEnabled(enabled bool) error {
+	logger.Infof("Setting network printing enabled: %v", enabled)
+	return a.config.SetNetworkPrintingEnabled(enabled)
+}
+
+func (a *App) IsNetworkPrintingEnabled() bool {
+	if a.config == nil {
+		return false
+	}
+	return a.config.IsNetworkPrintingEnabled()
+}
+
+type TroubleshootInfo struct {
+	ActiveFirewall string `json:"activeFirewall"`
+	FirewallZone   string `json:"firewallZone"`
+	Port           int    `json:"port"`
+	Subnet         string `json:"subnet"`
+	LocalIP        string `json:"localIp"`
+	ExecPath       string `json:"execPath"`
+}
+
+func (a *App) GetTroubleshootInfo() TroubleshootInfo {
+	netInfo := util.GetNetworkInfo()
+	execPath, _ := os.Executable()
+	return TroubleshootInfo{
+		ActiveFirewall: netInfo.ActiveFirewall,
+		FirewallZone:   netInfo.Zone,
+		Port:           a.config.GetPort(),
+		Subnet:         netInfo.Subnet,
+		LocalIP:        netInfo.IP,
+		ExecPath:       execPath,
+	}
 }

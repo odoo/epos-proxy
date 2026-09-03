@@ -13,7 +13,6 @@ type AppContextType = {
     isMac: boolean;
     isLinux: boolean;
     serverIsRunning: boolean;
-    defaultIp: string | null;
   };
   actions: {};
 };
@@ -35,7 +34,6 @@ export const AppContextWrapper = ({ children }: AppContextWrapper) => {
     isMac: os === "darwin",
     isLinux: os === "linux",
     serverIsRunning: app?.serverRunning ?? false,
-    defaultIp: app?.defaultIp ?? null,
   };
   const setters = {};
   const actions = {};

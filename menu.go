@@ -1,6 +1,8 @@
 package main
 
 import (
+	"runtime"
+
 	"epos-proxy/internal/logger"
 
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -11,12 +13,21 @@ func createMenu(app *App) *menu.Menu {
 	mainMenu := menu.NewMenu()
 	appMenu := mainMenu.AddSubmenu("App")
 
-	appMenu.AddText("Download Logs", nil, func(_ *menu.CallbackData) {
-		app.DownloadLogs()
-	})
+	if runtime.GOOS == "darwin" {
+		// Without an Edit menu, copy/paste do nothing on the webview on macO
+		mainMenu.Append(menu.EditMenu())
+	}
 
 	appMenu.AddCheckbox("Auto Start", app.IsAutostartEnabled(), nil, func(cb *menu.CallbackData) {
 		handleAutoStartToggle(app, cb)
+	})
+
+	appMenu.AddCheckbox("Allow Network Printing", app.IsNetworkPrintingEnabled(), nil, func(cb *menu.CallbackData) {
+		handleNetworkPrintingToggle(app, cb)
+	})
+
+	appMenu.AddText("Download Logs", nil, func(_ *menu.CallbackData) {
+		app.DownloadLogs()
 	})
 
 	appMenu.AddText("Quit", nil, func(_ *menu.CallbackData) {
@@ -42,6 +53,26 @@ func handleAutoStartToggle(app *App, cb *menu.CallbackData) {
 	if err := app.DisableAutostart(); err != nil {
 		logger.Errorf("Failed to disable autostart: %v", err)
 	}
+}
+
+func handleNetworkPrintingToggle(app *App, cb *menu.CallbackData) {
+	checked := cb.MenuItem.Checked
+
+	// Guards against a spurious callback firing with the already-persisted
+	// value (e.g. on initial menu setup) so the info dialog only shows for
+	// an actual user-driven change, never on app start.
+	if checked == app.IsNetworkPrintingEnabled() {
+		return
+	}
+
+	logger.Debugf("Allow Network Printing toggled: %v", checked)
+
+	if err := app.SetNetworkPrintingEnabled(checked); err != nil {
+		logger.Errorf("Failed to set network printing enabled: %v", err)
+		return
+	}
+
+	wailsruntime.EventsEmit(app.ctx, "network-printing-changed", checked)
 }
 
 func (app *App) ConfirmQuit() bool {

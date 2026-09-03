@@ -3,8 +3,10 @@ import {
   AddLANPrinter,
   CheckLANPrinterStatus,
   ConfirmRemoveLANPrinter,
+  IsNetworkPrintingEnabled,
   Printers,
 } from "../../wailsjs/go/main/App";
+import { EventsOn } from "../../wailsjs/runtime/runtime";
 
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 
@@ -24,6 +26,7 @@ type PrinterContextType = {
     printers: main.Printers | null;
     lanStatus: PrinterLanStatusByIp;
     fetchError: string | null;
+    networkPrintingEnabled: boolean;
   };
   actions: {
     removeLanPrinter: (printer: main.Printer) => Promise<ActionStatus>;
@@ -41,6 +44,7 @@ export const PrinterContextWrapper = ({ children }: PrinterContextWrapper) => {
   const [printers, setPrinters] = useState<main.Printers | null>(null);
   const [lanStatus, setLanStatus] = useState<PrinterLanStatusByIp>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [networkPrintingEnabled, setNetworkPrintingEnabledState] = useState(false);
 
   // A status sweep can outlast the poll interval (USB rescan plus a 3s dial
   // timeout per unreachable LAN printer), so ticks skip while one is running.
@@ -191,6 +195,26 @@ export const PrinterContextWrapper = ({ children }: PrinterContextWrapper) => {
     };
   }, [checkAppStatus]);
 
+  const loadNetworkPrintingStatus = useCallback(async () => {
+    try {
+      const enabled = await IsNetworkPrintingEnabled();
+      setNetworkPrintingEnabledState(enabled);
+    } catch (err) {
+      console.error("Failed to load network printing status", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNetworkPrintingStatus();
+  }, [loadNetworkPrintingStatus]);
+
+  useEffect(() => {
+    return EventsOn("network-printing-changed", () => {
+      loadNetworkPrintingStatus();
+      checkAppStatus(true);
+    });
+  }, [loadNetworkPrintingStatus, checkAppStatus]);
+
   const setters = {};
   const actions = {
     removeLanPrinter,
@@ -200,6 +224,7 @@ export const PrinterContextWrapper = ({ children }: PrinterContextWrapper) => {
     printers: printers,
     lanStatus,
     fetchError,
+    networkPrintingEnabled,
   };
 
   return (

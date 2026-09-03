@@ -6,23 +6,23 @@ export function zadigSteps(printerName: string) {
   return [
     {
       title: "Download Zadig",
-      desc: "Download the latest version of Zadig from the official website.",
+      desc: "Download the latest version of *Zadig* from the official website.",
       link: "https://zadig.akeo.ie",
       linkLabel: "Open Zadig website",
     },
     {
       title: "Open Zadig",
-      desc: "Run Zadig.exe as Administrator.\nGo to Options → List All Devices.",
+      desc: "Run *Zadig.exe as Administrator*.\nGo to *Options → List All Devices*.",
       image: image1,
     },
     {
       title: "Select your printer",
-      desc: `Find the printer in the dropdown list.\n The name may vary, but it should look similar to "${printerName}".`,
+      desc: `Find the printer in the dropdown list.\nThe name may vary, but it should look similar to *${printerName}*.`,
       image: image2,
     },
     {
       title: "Install WinUSB driver",
-      desc: 'Make sure WinUSB is selected, then click "Replace Driver". Wait for completion.',
+      desc: 'Make sure *WinUSB* is selected, then click *"Replace Driver"*. Wait for completion.',
       image: image3,
     },
   ];
@@ -32,7 +32,7 @@ export function brewSteps(printerName: string) {
   return [
     {
       title: "Install Homebrew",
-      desc: "Homebrew is a package manager for macOS. If you already have it, skip to the next step.",
+      desc: "*Homebrew* is a package manager for macOS. If you already have it, skip to the next step.",
       link: "https://brew.sh",
       linkLabel: "Open Homebrew website",
     },
@@ -43,7 +43,7 @@ export function brewSteps(printerName: string) {
     },
     {
       title: "Reconnect your printer",
-      desc: `Unplug and replug your printer "${printerName}".\nThe driver should now be detected automatically.`,
+      desc: `Unplug and replug your printer *${printerName}*.\nThe driver should now be detected automatically.`,
     },
   ];
 }
@@ -70,7 +70,7 @@ export function linuxSteps(printerName: string) {
     },
     {
       title: "Reconnect your printer and apply changes",
-      desc: `Unplug and reconnect your printer "${printerName}". Then restart your device to apply the new group permissions.`,
+      desc: `Unplug and reconnect your printer *${printerName}*. Then *restart your device* to apply the new group permissions.`,
     },
   ];
 }
